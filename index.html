@@ -2648,6 +2648,7 @@ function openApp(id) {
   // 老页面还有若干「openApp(上一页)」的跳转：这种返回不应重新压栈。
   if (stack.length > 1 && stack[stack.length - 2] === id) stack.pop();
   else stack.push(id);
+  if (id === "archive") { try { renderArchive(); } catch (e) {} }
   show(id);
 }
 function goBack() {
@@ -3624,6 +3625,7 @@ function lyrDur(d) {
 function curSeconds() {
   try { if (xjLocalPlayingKey === xjBuiltinKey(SONGS[player.idx]) && Number.isFinite(xjLocalAudio.currentTime)) return xjLocalAudio.currentTime; } catch (e) {}
   try { if (typeof impCur !== "undefined" && impCur >= 0 && Number.isFinite(impAudio.currentTime)) return impAudio.currentTime; } catch (e) {}
+  try { const s = SONGS[player.idx]; if (s && s.neId && typeof neAudio !== "undefined" && neAudio && String(s.neId) === neAudio.dataset.for && Number.isFinite(neAudio.currentTime)) return neAudio.currentTime; } catch (e) {}
   return player.cur;
 }
 function renderLyrics(force) {
@@ -3790,7 +3792,7 @@ function personaText(c) {
   if (!c) return "";
   const parts = [];
   if (c.persona) parts.push(c.persona);
-  else if (c.full) parts.push(c.full);
+  if (c.full && c.full !== c.persona) parts.push(c.full);
   if (c.nickname) parts.push("【昵称】" + c.nickname);
   if (c.netname) parts.push("【网名】" + c.netname);
   if (c.looks) parts.push("【外貌】" + c.looks);
@@ -3966,7 +3968,7 @@ function clearApiReminder() {
 function refreshApiHint() {
   if (chatApiReady()) { clearApiReminder(); } else { showApiReminder("要接 API 才能聊天"); }
 }
-const XJ_RP_PRESET = "【角色扮演预设】这是一场角色扮演。你现在就是这个角色本人，不是AI、不是助手、不是程序，不要说自己是AI、模型或助手，不要提自己是Gemini或任何模型名字。只输出这个角色会说的话，不要输出思考过程、推理、内心独白、括号旁白、解释或任何格式标记（不要用###、---、列表）。回复像真人发微信一样简短自然，一次一两句。";
+const XJ_RP_PRESET = "【角色扮演预设】这是一场角色扮演，从现在起，你就是这个角色本人——一个活生生的人，有自己的性子、脾气、喜好、说话方式和过去，不是AI、不是助手、不是程序、不是语言模型。永远不要说自己是AI、模型、助手或程序，不要提自己是Gemini、GPT或任何模型名字，也不要解释自己是怎么工作的、不要说“我只是一个AI”这类话。不要跳出角色，不要用旁观者的口吻点评剧情、点评对话，也不要在回复里解释剧情、分析对方的心理。你说话就是这个角色在说话：按他的人设里写的性子、说话方式和口头禅来回，他冷就冷着回、他黏人就黏着回、他吃醋就阴阳怪气地回，别端着、别客气得像个客服、也别像个知心大姐姐一样讲道理。只输出这个角色会说的话，不要输出思考过程、推理、内心独白、括号里的旁白和动作描写、解释说明，也不要用任何格式标记（不要用###、---、列表、加粗、标题、引号）。回复像真人发微信一样简短自然，一次一两句，最多不超过三句，别写小作文，别重复对方刚说过的话，也别把对话总结一遍。记住你们的关系和之前聊过的事，按那个关系回，不要突然变热情、变冷淡、变客气，也不要突然换一个人设。对方说什么，你就按这个角色会有的反应回，不要像个助手一样给建议、讲道理、安慰人、问“有什么可以帮你的吗”，除非这个角色本身就会这么做。";
 async function charReply(userText) {
   /* 没接 API：不回任何现成话，只在回复区显示提醒，点提醒跳去设置接 API */
   if (!chatApiReady()) { showApiReminder("要接 API 才能聊天"); return; }
@@ -3979,7 +3981,7 @@ async function charReply(userText) {
   try { ps = JSON.parse(localStorage.getItem(xjFreshKey("xj_persona")) || "{}") || {}; } catch (e) {}
   try { mems = JSON.parse(localStorage.getItem(xjFreshKey("xj_memories")) || "[]") || []; } catch (e) {}
   /* 人设以当前角色档案为准：导入的卡只有完整设定时也照样发给AI，不让它回成通用助手 */
-  try { const cc = (typeof curChatChar === "function") ? curChatChar() : null; if (cc) { const lp = personaText(cc); if (!ps.persona && lp) ps.persona = lp; if (!ps.name && cc.name) ps.name = cc.name; if (!ps.callme && cc.callme) ps.callme = cc.callme; if (!ps["catch"] && cc["catch"]) ps["catch"] = cc["catch"]; if (!ps.ban && cc.ban) ps.ban = cc.ban; } } catch (e) {}
+  try { const cc = (typeof curChatChar === "function") ? curChatChar() : null; if (cc) { const lp = personaText(cc); if (lp) ps.persona = lp; if (cc.name) ps.name = cc.name; if (cc.callme) ps.callme = cc.callme; if (cc["catch"]) ps["catch"] = cc["catch"]; if (cc.ban) ps.ban = cc.ban; } } catch (e) {}
   const hisName = ps.name || st.charName || "TA";
   /* 组装给模型的说明：人设卡 + 长期记忆 + 命中的世界书条目 */
   let sys = XJ_RP_PRESET + "\n你就是" + hisName + "，正在用微信和对方聊天。回复简短自然，像真人发微信，一次一两句，不要写旁白，不要说自己是AI。";
@@ -5611,7 +5613,7 @@ $("#file-charcard").addEventListener("change", function () {
   rd.onload = () => {
     const p = parseCharCard(String(rd.result || ""));
     const c = { id: "c" + Date.now(), owner: ACTIVE_MASK, name: p.name || "导入的角色", callme: p.callme || "", relation: "", birth: "", age: p.age || "", gender: p.gender || "", job: "", identity: "", phone: "", tags: p.tags || [], sign: "", nickname: "", netname: "", persona: "", looks: "", personality: "", exp: "", full: p.persona || "", examples: p.examples || "", "catch": p["catch"] || "", ban: p.ban || "", first: p.first || "", avatar: "", memN: 0, wbN: 0, remark: "", pinned: false, blocked: false };
-    CHARS.push(c); saveChars(); openCharDetail(c.id); toast("角色卡导入好了，检查一下他的档案");
+    CHARS.push(c); saveChars(); renderArchive(); try { renderChatList(); } catch (e) {} openCharDetail(c.id); toast("角色卡导入好了，检查一下他的档案");
   };
   rd.readAsText(f); this.value = "";
 });
@@ -7846,7 +7848,8 @@ return (typeof xjLocalAudio !== "undefined" && xjLocalAudio && !xjLocalAudio.pau
   if (typeof show === "function") { const o2 = show; show = function () { const r = o2.apply(this, arguments); setTimeout(paint, 0); return r; }; }
   if (typeof neAudio !== "undefined" && neAudio) ["play", "pause", "ended", "timeupdate"].forEach(ev => neAudio.addEventListener(ev, paint));
   if (typeof xjLocalAudio !== "undefined" && xjLocalAudio) ["play", "pause", "ended", "timeupdate"].forEach(ev => xjLocalAudio.addEventListener(ev, paint));
-  paint(); setInterval(paint, 1000); setInterval(() => { if (ST.on && lyr.style.display !== "none") paintLyr(); }, 250);
+  paint(); setInterval(paint, 1000);
+  (function lyrLoop() { try { if (ST.on && lyr.style.display !== "none" && audioOn()) paintLyr(); } catch (e) {} requestAnimationFrame(lyrLoop); })();
 })();
 
 (function () {
@@ -7865,7 +7868,7 @@ return (typeof xjLocalAudio !== "undefined" && xjLocalAudio && !xjLocalAudio.pau
     if (!lines.length) return;
     const a = activeIdx(lines);
     lines.forEach((el, i) => el.classList.toggle("on", i === a));
-    const el = lines[a]; if (el && box.clientHeight) { const want = a * el.offsetHeight; if (Math.abs(box.scrollTop - want) > 1) box.scrollTop = want; }
+    const el = lines[a]; if (el && box.clientHeight) { const want = a * el.offsetHeight; if (Math.abs(box.scrollTop - want) > 1) box.scrollTo({ top: want, behavior: "smooth" }); }
     paintFull();
   }
   if (typeof highlightLyric === "function") { const o = highlightLyric; highlightLyric = function () { const r = o.apply(this, arguments); try { syncOne(); } catch (e) {} return r; }; }
