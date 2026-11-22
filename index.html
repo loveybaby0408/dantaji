@@ -252,7 +252,7 @@
   .voicebub .bars i { width: 3px; border-radius: 2px; background: currentColor; opacity: .55; display: block; }
   .voicebub.playing .bars i { animation: vb 0.7s ease-in-out infinite alternate; }
   @keyframes vb { from { transform: scaleY(.4); } to { transform: scaleY(1.15); } }
-  .cardmsg { width: 218px; border-radius: 14px; padding: 13px 14px; background: var(--bubble); box-shadow: 0 1px 3px rgba(30,30,40,.06); }
+  .cardmsg { width: 218px; border-radius: 24px; padding: 13px 14px; background: var(--bubble); box-shadow: 0 1px 3px rgba(30,30,40,.06); }
   .msg.me .cardmsg { background: #e3e3e8; color: #26262b; }
   .cardmsg .cm-t { font-size: 12px; opacity: .65; display: flex; align-items: center; gap: 5px; }
   .cardmsg .cm-big { font-size: 21px; font-weight: 600; margin: 5px 0 2px; }
@@ -878,10 +878,12 @@ input[type="range"] { accent-color:var(--latte); }
 .msg .bub { background:var(--bubble); border-radius:20px 20px 20px 6px; box-shadow:0 2px 10px rgba(0,0,0,.05); color:var(--ink); }
 .msg.me .bub, .msg.me .cardmsg, .off-me,
 .phone[data-accent] .msg.me .bub, .phone[data-accent] .msg.me .cardmsg { background:#1d1d1f !important; color:#ffffff !important; border-radius:20px 20px 6px 20px; }
+/* 分享卡片（转账/音乐/名片/位置/收藏）比消息气泡更圆：四个角都是 24px，消息气泡有一角是 6px */
+.msg.me .cardmsg, .phone[data-accent] .msg.me .cardmsg { border-radius:24px; }
 /* 名片仿微信：名片卡片永远是白底黑字（不跟我方气泡变黑） */
 .msg.me .cardmsg.namecard, .phone[data-accent] .msg.me .cardmsg.namecard { background:#fff !important; color:#111 !important; }
 .phone[data-theme="dark"] .msg.me .bub, .phone[data-theme="dark"] .msg.me .cardmsg, .phone[data-theme="dark"] .off-me { background:#f2f2f2 !important; color:#1d1d1f !important; }
-.cardmsg { border-radius:18px; box-shadow:0 2px 10px rgba(0,0,0,.05); }
+.cardmsg { border-radius:24px; box-shadow:0 2px 10px rgba(0,0,0,.05); }
 .typing i { background:var(--latte); }
 .chatbar { background:var(--bg); }
 .chatbar input { background:var(--card); border:1px solid #ebebea; }
