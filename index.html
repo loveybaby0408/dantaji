@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 <meta name="color-scheme" content="light" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -1499,6 +1499,8 @@ input[type="range"] { accent-color:var(--latte); }
 .sb-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 16px 12px; }
 .sb-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px 10px; background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; font-size: 12px; color: var(--ink); }
 .sb-opt.on { border-color: #1d1d1f; box-shadow: 0 0 0 1px #1d1d1f inset; }
+.sb-opt { position: relative; }
+.sb-opt .sb-cpick { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .sb-opt svg { width: 22px; height: 22px; display: block; }
 .sb-dot { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.15); }
 .sb-custom-ic { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; }
@@ -2126,7 +2128,7 @@ html,body{background:#fff!important;background-image:none!important;}
           <div class="msg"><img class="av" id="beauty-av-him" alt="" /><div class="bub">在吗</div></div>
           <div class="msg me"><img class="av" id="beauty-av-me" alt="" /><div class="bub">在呀，怎么了</div></div>
           <div class="msg"><img class="av" id="beauty-av-him2" alt="" /><div class="cardmsg"><div class="cm-t">⇄ 转账</div><div class="cm-big">¥1.00</div><div class="cm-sub">转账</div><div class="cm-st">等待对方收款</div></div></div>
-          <div class="msg me"><img class="av" id="beauty-av-me2" alt="" /><div class="cardmsg"><div class="cm-music"><img class="beauty-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='42' height='42'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d7d7dc'/><stop offset='1' stop-color='%23a9a9b0'/></linearGradient></defs><rect width='42' height='42' rx='9' fill='url(%23g)'/><text x='21' y='29' font-size='20' text-anchor='middle' fill='white'>%E2%99%AA</text></svg>" alt="歌曲封面" /><span><span style="font-weight:600">左手指月</span><br /><span style="font-size:12.5px;opacity:.7">花火 NIKO</span></span></div></div></div>
+          <div class="msg me"><img class="av" id="beauty-av-me2" alt="" /><div class="cardmsg"><div class="cm-music"><img class="beauty-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='42' height='42'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d7d7dc'/><stop offset='1' stop-color='%23a9a9b0'/></linearGradient></defs><rect width='42' height='42' rx='9' fill='url(%23g)'/><text x='21' y='29' font-size='20' text-anchor='middle' fill='white'>%E2%99%AA</text></svg>" alt="歌曲封面" /><span><span style="font-weight:600">茉莉雨</span><br /><span style="font-size:12.5px;opacity:.7">林俊杰</span></span></div></div></div>
         </div>
         <div class="chatbar beauty-bar">
           <div class="inrow">
@@ -2184,8 +2186,8 @@ html,body{background:#fff!important;background-image:none!important;}
           </div>
         </div>
       </div>
-      <p class="hint">上面就是整页的效果：顶栏、场景小药丸、他的文字、我的黑 pill、输入框都在里面。切「改之前」看没改的样子，切「改之后」看改完的样子，边写 CSS 边实时变。</p>
-      <p class="hint">能改的地方（写进下面 CSS 里）：<br />#scr-offline .navbar { } 顶栏<br />#off-list { } 整个线下页背景<br />.off-scene { } 场景小药丸（· 家里 ·）<br />.off-him { } 他的那段　.off-me { } 我的那句<br />.off-him .off-name { } 他的名字　.off-him .off-text { } 他写的内容<br />我的那句是黑底白字，主题锁死的，改颜色要加 !important（和聊天里我发的气泡一样）；他的那段是透明底，改底色不用加 !important<br />.chatbar { } 底部那一条　.chatbar input { } 输入框<br />.chatbar .sendbtn { } 发送键（改颜色要加 !important）</p>
+      <p class="hint">上面就是整页的效果：顶栏、场景、他说的话、我说的话、输入框都在里面。切「改之前」看没改的样子，切「改之后」看改完的样子，边写 CSS 边实时变。</p>
+      <p class="hint">能改的地方（写进下面 CSS 里）：<br />#scr-offline .navbar { } 顶栏<br />#off-list { } 整个线下页背景<br />.off-scene { } 场景（· 家里 ·）<br />.off-him { } 他的那段　.off-me { } 我的那句<br />.off-him .off-name { } 他的名字　.off-him .off-text { } 他写的内容<br />我的那句是黑底白字，主题锁死的，改颜色要加 !important（和聊天里我发的气泡一样）；他的那段是透明底，改底色不用加 !important<br />.chatbar { } 底部那一条　.chatbar input { } 输入框<br />.chatbar .sendbtn { } 发送键（改颜色要加 !important）</p>
       <div class="fld"><label>✎ 在这里写 CSS（写完上面实时变）</label><textarea class="cssedit" id="offbeauty-css" placeholder=".off-him .off-text {&#10;  color: #8a6d3b !important;&#10;}&#10;&#10;.off-me {&#10;  background: #f27fb0 !important;&#10;}"></textarea></div>
       <div class="btnrow">
         <button class="btn ghost" id="offbeauty-clear">清空，恢复默认</button>
@@ -2240,8 +2242,6 @@ html,body{background:#fff!important;background-image:none!important;}
       <div class="sb-grid" id="sb-sticker-grid"></div>
       <input type="file" id="sb-sticker-file" accept="image/*" hidden>
       <input type="file" id="sb-icon-file" accept="image/*" hidden>
-      <input type="color" id="sb-batt-color" value="#f27fb0" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
-      <input type="color" id="sb-wifi-color" value="#f27fb0" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
       <button class="sb-reset" id="sb-reset">恢复默认</button>
       <p class="xj-beauty-note">图标和小贴画都是原创画的，不抄别人的。</p>
     </div>
@@ -10035,8 +10035,6 @@ function applySbBeauty(){
   sbSyncCustomCell('sb-sticker-grid', 'xj_sb_sticker_img');
   sbSyncCustomDot('sb-batt-grid', 'xj_sb_batt_color');
   sbSyncCustomDot('sb-wifi-grid', 'xj_sb_wifi_color');
-  var bc2 = document.getElementById('sb-batt-color'); if (bc2) { try { bc2.value = sbStored('xj_sb_batt_color') || '#f27fb0'; } catch (e) {} }
-  var wc2 = document.getElementById('sb-wifi-color'); if (wc2) { try { wc2.value = sbStored('xj_sb_wifi_color') || '#f27fb0'; } catch (e) {} }
 }
 function sbBuildGrids(){
   var ig = document.getElementById('sb-icon-grid');
@@ -10063,7 +10061,10 @@ function sbBuildGrids(){
     });
     var cu = document.createElement('button'); cu.className = 'sb-opt'; cu.dataset.v = 'custom';
     cu.innerHTML = '<span class="sb-dot" style="background:conic-gradient(#f27fb0,#f7c948,#3fbf7a,#5b8def,#9b7ede,#f27fb0)"></span><span>自定义</span>';
-    cu.addEventListener('click', function(){ var f = document.getElementById(id === 'sb-batt-grid' ? 'sb-batt-color' : 'sb-wifi-color'); if (f) f.click(); });
+    var ci = document.createElement('input'); ci.type = 'color'; ci.className = 'sb-cpick'; ci.setAttribute('aria-label', '自定义颜色');
+    ci.value = sbStored(id === 'sb-batt-grid' ? 'xj_sb_batt_color' : 'xj_sb_wifi_color') || '#f27fb0';
+    ci.addEventListener('input', function(){ try { localStorage.setItem(id === 'sb-batt-grid' ? 'xj_sb_batt_color' : 'xj_sb_wifi_color', ci.value); } catch (e) {} SB[key] = 'custom'; sbSave(); applySbBeauty(); });
+    cu.appendChild(ci);
     g.appendChild(cu);
   }
   buildColorGrid('sb-batt-grid', 'batt');
@@ -10083,10 +10084,6 @@ function sbBuildGrids(){
   if (sif && !sif.dataset.sb) { sif.dataset.sb = '1'; sif.addEventListener('change', function(){ if (sif.files && sif.files[0]) sbUploadImage(sif.files[0], 'xj_sb_icon_img', function(){ SB.icon = 'custom'; sbSave(); applySbBeauty(); }); sif.value = ''; }); }
   var sf = document.getElementById('sb-sticker-file');
   if (sf && !sf.dataset.sb) { sf.dataset.sb = '1'; sf.addEventListener('change', function(){ if (sf.files && sf.files[0]) sbUploadImage(sf.files[0], 'xj_sb_sticker_img', function(){ SB.sticker = 'custom'; sbSave(); applySbBeauty(); }); sf.value = ''; }); }
-  var bc = document.getElementById('sb-batt-color');
-  if (bc && !bc.dataset.sb) { bc.dataset.sb = '1'; bc.addEventListener('input', function(){ try { localStorage.setItem('xj_sb_batt_color', bc.value); } catch (e) {} SB.batt = 'custom'; sbSave(); applySbBeauty(); }); }
-  var wc = document.getElementById('sb-wifi-color');
-  if (wc && !wc.dataset.sb) { wc.dataset.sb = '1'; wc.addEventListener('input', function(){ try { localStorage.setItem('xj_sb_wifi_color', wc.value); } catch (e) {} SB.wifi = 'custom'; sbSave(); applySbBeauty(); }); }
   var rs = document.getElementById('sb-reset');
   if (rs && !rs.dataset.sb) { rs.dataset.sb = '1'; rs.addEventListener('click', function(){ SB = Object.assign({}, SB_DEF); sbSave(); applySbBeauty(); if (typeof toast === 'function') toast('已恢复默认'); }); }
 }
@@ -10858,6 +10855,53 @@ window.addEventListener("click", function (e) {
   const hide = () => { if (gone) return; gone = true; tm.forEach(clearTimeout); sp.classList.add("out"); setTimeout(() => sp.remove(), 650); };
   sp.addEventListener("click", hide);
   tm.push(setTimeout(hide, 7600));
+})();
+</script>
+
+<style id="xj-ios-input-keyboard-fix">
+/* iOS：输入框字号小于 16px 一点就自动放大页面，所以所有输入框统一 16px */
+.phone input:not([type="range"]):not([type="color"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+.phone textarea, .phone select, .phone .cssedit,
+.phone .chatbar input, .phone .fld input, .phone .fld textarea, .phone .fld select,
+.phone .searchbar input, .phone .togchat input { font-size: 16px !important; }
+/* 键盘弹起：整台手机只占键盘上方那块，输入条贴在底下，只留约 10px */
+html.xj-kb .phone .homebar { height: 6px !important; }
+html.xj-kb #scr-chat .chatbar,
+html.xj-kb #scr-offline .chatbar { padding-bottom: 4px !important; }
+</style>
+<script id="xj-ios-keyboard-fix">
+(function () {
+  var vv = window.visualViewport;
+  if (!vv) return;
+  var root = document.documentElement;
+  function phone() { return document.querySelector('.phone'); }
+  function reset(ph) {
+    if (!ph) return;
+    ['height', 'top', 'bottom'].forEach(function (k) { ph.style.removeProperty(k); });
+    root.classList.remove('xj-kb');
+  }
+  function update() {
+    var ph = phone(); if (!ph) return;
+    // 只在手机窄屏下处理；桌面的手机框不动
+    if (!window.matchMedia('(max-width: 559.98px)').matches) { reset(ph); return; }
+    var covered = window.innerHeight - vv.height;
+    if (covered > 80) {
+      // 键盘打开：把整台手机改成键盘上面那块可视高度，并跟着可视区顶部走，名字不会被顶出屏幕
+      ph.style.setProperty('height', vv.height + 'px', 'important');
+      ph.style.setProperty('top', vv.offsetTop + 'px', 'important');
+      ph.style.setProperty('bottom', 'auto', 'important');
+      root.classList.add('xj-kb');
+      if (window.scrollY) window.scrollTo(0, 0);
+    } else {
+      reset(ph);
+    }
+  }
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  window.addEventListener('orientationchange', function () { setTimeout(update, 300); });
+  document.addEventListener('focusout', function () { setTimeout(update, 120); setTimeout(update, 400); });
+  document.addEventListener('focusin', function () { setTimeout(update, 120); setTimeout(update, 400); });
+  update();
 })();
 </script>
 </body>
