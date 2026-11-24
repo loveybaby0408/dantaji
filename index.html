@@ -2441,6 +2441,17 @@ html,body{background:#fff!important;background-image:none!important;}
 .fx-bigbtn.sm{font-size:13px;padding:9px 12px;margin-top:4px}
 .fx-mrs,.fx-mrs .fx-rlrow,.fx-mrs .fx-rltx{text-align:center!important}p.hint.fx-mrs{margin:10px 8px 14px!important;padding:0!important}
 .fx-bub.fx-bubrm{background:transparent!important;color:var(--fx-sub)!important;border:1px dashed var(--fx-line)!important;font-size:13px}
+
+.fx-pstat{display:flex;align-items:center;justify-content:center;gap:8px;margin:14px 16px;padding:10px 14px;border-radius:12px;background:var(--fx-soft);color:var(--fx-sub);font-size:13px;line-height:1.5}
+.fx-pstat.bad{justify-content:space-between;background:#fdecec;color:#c62828;text-align:left}
+.fx-pstat.bad button{flex:none;border:0;background:none;color:#c62828;font-weight:700;font-size:13px;padding:2px 4px}
+.fx-spin{display:block;box-sizing:border-box;width:14px;height:14px;border:2px solid rgba(0,0,0,.15);border-top-color:#536471;border-radius:50%;animation:fxspin .8s linear infinite;flex:none;align-self:center}
+.fx-pstat>span{display:block;line-height:16px}
+@keyframes fxspin{to{transform:rotate(360deg)}}
+.fx-mrow .fx-ri{margin:-5px 0 -5px auto;gap:0}
+.fx-mrow .fx-pm{width:28px;height:28px;margin:-5px -6px -5px 0;border-radius:50%}
+.fx-mrow .fx-pm svg,.fx-mrow .fx-ic svg{width:18px;height:18px}
+.fx-mrow .fx-pm svg circle{r:2px}
 .fx-loading{border-bottom:0!important}
 #fxf-cs{margin-bottom:14px}
 .fx-dmai.stop{background:#0f1419!important;color:#fff!important;border-color:#0f1419!important}.phone[data-theme="dark"] .fx-dmai.stop{background:#e7e9ea!important;color:#000!important}.fx-dmai.stop svg{width:18px;height:18px}
@@ -16418,24 +16429,25 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
         const r = await fetch(normApiUrl(fc.url), { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + fc.key },
           body: JSON.stringify({ model: fc.model || "gpt-4o-mini", temperature: 0.95, max_tokens: Math.max(1200, max || 800), messages: [{ role: "system", content: sys }, { role: "user", content: user }] }) });
         if (!r.ok) { window.__fxErr = "论坛聊天 API 返回 " + r.status + (r.status === 401 ? "（密钥不对）" : r.status === 404 ? "（地址或模型名不对）" : ""); return null; }
-        const j = await r.json(); return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
-      } catch (e) { window.__fxErr = "论坛聊天 API 连不上"; return null; }
+        const j = await r.json(); const c1 = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim(); if (!c1) window.__fxErr = "论坛聊天 API 返回了空内容（可能额度用完或被模型拒答）"; return c1;
+      } catch (e) { window.__fxErr = "论坛聊天 API 连不上（网络断了，或接口地址不对）"; return null; }
     }
-    if (window.rain && typeof window.rain.ai === "function") return await window.rain.ai(user, { system: sys, max: max || 800 });
-    if (!(apis.chat && apis.chat.url && apis.chat.key)) return null;
+    if (window.rain && typeof window.rain.ai === "function") { let out; try { out = await window.rain.ai(user, { system: sys, max: max || 800 }); } catch (e) { window.__fxErr = "聊天 API 出错：" + String(e && e.message || e).slice(0, 60); return null; } if (!out) window.__fxErr = window.__fxErr || "聊天 API 没返回内容（可能额度用完、超时或被模型拒答）"; return out; }
+    if (!(apis.chat && apis.chat.url && apis.chat.key)) { window.__fxErr = "还没接聊天 API"; return null; }
     try {
       const r = await fetch(normApiUrl(apis.chat.url), { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apis.chat.key },
         body: JSON.stringify({ model: apis.chat.model || "gpt-4o-mini", temperature: 0.95, messages: [{ role: "system", content: sys }, { role: "user", content: user }] }) });
-      if (!r.ok) return null;
-      const j = await r.json(); return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
-    } catch (e) { return null; }
+      if (!r.ok) { window.__fxErr = "聊天 API 返回 " + r.status + (r.status === 401 ? "（密钥不对）" : r.status === 404 ? "（地址或模型名不对）" : r.status === 429 ? "（请求太频繁或额度用完）" : r.status >= 500 ? "（服务器出错）" : ""); return null; }
+      const j = await r.json(); const c0 = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+      if (!c0) window.__fxErr = "聊天 API 返回了空内容（可能额度用完或被模型拒答）"; return c0;
+    } catch (e) { window.__fxErr = "聊天 API 连不上（网络断了，或接口地址不对）"; return null; }
   }
   function pj(raw) {
     if (!raw) return null; const s = String(raw).replace(/```(json)?/gi, "");
     const a = s.indexOf("{"), b = s.lastIndexOf("}"); if (a < 0 || b <= a) return null;
     try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { try { return JSON.parse(s.slice(a, b + 1).replace(/,\s*([}\]])/g, "$1")); } catch (e2) { return null; } }
   }
-  const failMsg = () => (fxApi("chat") && window.__fxErr) ? window.__fxErr : (window.__xjReason ? window.__xjReason() : "生成失败，检查一下聊天 API");
+  const failMsg = () => window.__fxErr ? window.__fxErr : (window.__xjReason ? window.__xjReason() : "生成失败，检查一下聊天 API");
   function needApi() { if (fxApi("chat")) return true; if (typeof chatApiReady === "function" && chatApiReady()) return true; toast("先去设置里接好聊天 API"); return false; }
 
   /* ---------- 生成：刷新动态 ---------- */
@@ -16480,8 +16492,32 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
   function threadText(post) {
     return "［帖子］" + nameOf(post.au) + "：" + post.text + imgNote(post) + "\n［评论区］\n" + ((post.rep || []).filter(r => !r.removed).slice(-24).map(r => nameOf(r.au) + (r.to ? " 回复 " + nameOf(r.to) : "") + "：" + r.text).join("\n") || "（还没有回复）");
   }
+  /* 评论区 / 私信输入框获得焦点时，把浏览器自己的滚动钉回顶部，避免键盘弹出时整页闪一下 */
+  (function () {
+    const IN = el => el && el.closest && el.closest("#scr-forumpost, #scr-forumdm");
+    const pin = () => { let k = 0; const f = () => { if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } if (++k < 40) requestAnimationFrame(f); }; f(); };
+    document.addEventListener("focusin", e => { if (IN(e.target)) pin(); });
+    if (window.visualViewport) window.visualViewport.addEventListener("scroll", () => { if (IN(document.activeElement)) window.scrollTo(0, 0); });
+  })();
+  /* 帖子里的「正在回复 / 回复失败」状态 */
+  const PBUSY = new Map();
+  function pstatHTML(p) {
+    const k = PBUSY.get(p.id);
+    if (k) return '<div class="fx-pstat"><i class="fx-spin"></i><span>' + E(k) + '</span></div>';
+    if (p._err && now() - p._err.t < 10 * 60000) return '<div class="fx-pstat bad"><span>回复失败：' + E(p._err.msg) + '</span><button type="button" data-perrx="1">知道了</button></div>';
+    return "";
+  }
+  function pstatSet(p, label) { if (label) { PBUSY.set(p.id, label); p._err = null; } else PBUSY.delete(p.id); if (CUR === p.id && $("#scr-forumpost").classList.contains("active")) { renderPost(); if (label) { const b = $("#fxp-body"); if (b) b.scrollTop = b.scrollHeight; } } }
+  function pfail(p, msg) { p._err = { t: now(), msg }; save(); toast("回复失败：" + msg); }
   async function replyRound(post, mine, opt) {
     opt = opt || {}; if (!needApi()) return;
+    const sm0 = opt.summon ? charById(opt.summon) : null;
+    pstatSet(post, sm0 ? cName(sm0) + " 正在回复…" : "正在生成回复…");
+    try { return await replyRound0(post, mine, opt); }
+    catch (e) { pfail(post, "出错了：" + String(e && e.message || e).slice(0, 60)); }
+    finally { pstatSet(post, null); }
+  }
+  async function replyRound0(post, mine, opt) {
     const d = FX(); const summon = opt.summon ? charById(opt.summon) : null;
     const cs = summon ? [summon] : (opt.who ? (opt.who === "npc" ? [] : (opt.cids && opt.cids.length ? chars().filter(c => opt.cids.indexOf(c.id) >= 0) : chars())) : (d.set.charAuto ? chars() : []));
     const sys = sysBase() + roster(cs);
@@ -16495,8 +16531,9 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     }
     const sys2 = sys + "\n【当前帖子】\n" + threadText(post);
     const fmt = "\n格式：{\"newNpcs\":[],\"replies\":[{\"author\":\"\",\"to\":\"回复谁（昵称），回帖主就留空\",\"text\":\"\"}],\"imp\":[{\"name\":\"\",\"imp\":\"\"}]" + (mine ? ",\"reportMe\":[{\"name\":\"举报 user 的 NPC 昵称\",\"why\":\"人身攻击 / 辱骂、骚扰、引战 / 恶意带节奏、造谣 / 不实信息、其他 选一个\"}],\"blockMe\":[\"把 user 拉黑的 NPC 昵称\"]" : "") + "}" + (mine ? "\nreportMe 和 blockMe 通常是空数组；只有 NPC 真的被 user 冒犯、或者性格就小心眼爱举报/拉黑时才写。" : "") + JSON_RULE;
-    const j = pj(await llm(sys2, ask + fmt, 1500));
-    if (!j) { toast(failMsg()); return; }
+    window.__fxErr = null; const raw = await llm(sys2, ask + fmt, 1500);
+    const j = pj(raw);
+    if (!j) { pfail(post, raw ? "AI 返回的内容格式不对，没解析出回复（可能被截断了，换个模型或再试一次）" : failMsg()); return; }
     addNewNpcs(j.newNpcs);
     let t = now(), n = 0;
     (j.replies || []).forEach(r => {
@@ -16518,7 +16555,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       if (!bl.length && toMe.length && Math.random() < 0.03) bl.push(toMe[rnd(0, toMe.length - 1)]);
       bl.slice(0, 2).forEach(x => blockMe(x, mine.text));
     }
-    applyImp(j.imp); save(); renderAll(); if (!n) toast("暂时没人理你");
+    applyImp(j.imp); save(); renderAll(); if (!n) { if (mine && mine.kind !== "post") toast("暂时没人理你"); else pfail(post, (j.replies || []).length ? "AI 写的回复人都不能出场（被封禁、或是帖主自己），这次没有可用的回复" : "AI 这次返回了 0 条回复，再点一次试试"); }
   }
 
   /* ---------- 角色发帖 ---------- */
@@ -16631,7 +16668,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
         '<div class="fx-time">' + xTime(p.t) + " · <b>" + num(p.views) + "</b> 次查看</div>" + actsHTML(p, cnt, true) + "</div>";
       h += kids(p, null).map(r => repRow(p, r)).join("");
     }
-    b.innerHTML = h + '<div style="height:20px"></div>';
+    b.innerHTML = h + pstatHTML(p) + '<div style="height:20px"></div>';
     paintReplyTo(); save(); hydrateImgs(b);
   }
   function openRep(id) { FST.push(id); RTO = null; renderPost(); const b = $("#fxp-body"); if (b) b.scrollTop = 0; }
@@ -17404,8 +17441,9 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     const t = e.target;
     const u = t.closest("[data-fxu]"); if (u) { e.stopPropagation(); openUser(parseU(u.dataset.fxu)); return; }
     const at = t.closest("[data-fxat]"); if (at) { e.stopPropagation(); const au = lookAu(at.dataset.fxat); if (au) openUser(au); else toast("没有找到 @" + at.dataset.fxat); return; }
-    const gr = t.closest("[data-gr]"); if (gr) { e.stopPropagation(); const p = FX().posts.find(x => x.id === CUR); if (!p) return; if (gr.dataset.gr === "post") { toast("正在生成回复…"); (async () => { await replyRound(p, { kind: "post" }); for (const cid of mentioned(p.text)) await summonOn(p, cid, null); })(); } else { const r = (p.rep || []).find(x => x.id === gr.dataset.gr); if (r) { toast("正在生成回复…"); autoAfterMine(p, r); } } return; }
+    const gr = t.closest("[data-gr]"); if (gr) { e.stopPropagation(); const p = FX().posts.find(x => x.id === CUR); if (!p) return; if (gr.dataset.gr === "post") { (async () => { if (p.au.k === "me") await replyRound(p, { kind: "post" }); else await replyRound(p, null, { who: FX().set.charAuto ? "both" : "npc", n: 4 }); for (const cid of mentioned(p.text)) await summonOn(p, cid, null); })(); } else { const r = (p.rep || []).find(x => x.id === gr.dataset.gr); if (r) { toast("正在生成回复…"); autoAfterMine(p, r); } } return; }
     const cx = t.closest("[data-fxctx]"); if (cx) { e.stopPropagation(); if (cx.dataset.fxctx === "post") FST = []; else FST = FST.slice(0, FST.indexOf(cx.dataset.fxctx) + 1); renderPost(); return; }
+    if (t.closest("[data-perrx]")) { e.stopPropagation(); const p = FX().posts.find(x => x.id === CUR); if (p) { p._err = null; save(); renderPost(); } return; }
     const pv = t.closest("[data-fxpic]"); if (pv) { e.stopPropagation(); viewPic(pv.getAttribute("src")); return; }
     const pm = t.closest("[data-pmore]"); if (pm) { e.stopPropagation(); postMenu(pm.dataset.pmore); return; }
     const wf = t.closest("[data-wfol]"); if (wf) { e.stopPropagation(); toggleFollow(parseU(wf.dataset.wfol)); renderPost(); return; }
