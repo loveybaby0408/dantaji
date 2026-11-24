@@ -2741,6 +2741,11 @@ html,body{background:#fff!important;background-image:none!important;}
         <button class="btn ghost" id="beauty-clear">清空，恢复默认</button>
         <button class="btn" id="beauty-save">保存</button>
       </div>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="btn ghost" id="beauty-import" type="button">导入</button>
+        <button class="btn ghost" id="beauty-export" type="button">导出</button>
+      </div>
+      <input type="file" id="beauty-imp-file" accept=".json,.css,.txt,application/json,text/css,text/plain" hidden />
       <div style="height:10px"></div>
     </div>
     <div class="homebar dark"><i></i></div>
@@ -5361,6 +5366,7 @@ function renderChatInfo() {
     html += '<div class="secttl">设置</div><div class="card">' +
       '<button class="row" id="ci-remark"><span class="rlab">编辑备注</span><span class="rval">' + escH(real.remark || "未设置") + '</span><span class="chev">›</span></button>' +
       '<button class="row" id="ci-wb"><span class="rlab">绑定世界书</span><span class="rval">' + escH(wbBindLabel(real)) + '</span><span class="chev">›</span></button>' +
+      '<button class="row" id="ci-lockface"><span class="rlab">锁脸</span><span class="rval">' + escH(xjLockLabel(real)) + '</span><span class="chev">›</span></button>' +
       '<div class="row"><span class="rlab">置顶聊天</span><button class="swbtn" id="ci-pin" role="switch" aria-checked="' + (real.pinned ? "true" : "false") + '" aria-label="置顶聊天"><i></i></button></div>' +
       '<div class="row" id="ci-heart-row"><span class="rlab">开启心声</span><button class="swbtn" id="ci-heart" role="switch" aria-checked="' + (real.heartOn ? "true" : "false") + '" aria-label="开启心声"><i></i></button></div>' +
       '<div class="row" id="ci-auto-row"><span class="rlab">自动回复</span><button class="swbtn" id="ci-auto" role="switch" aria-checked="' + (real.autoReply ? "true" : "false") + '" aria-label="自动回复"><i></i></button></div>' +
@@ -5381,6 +5387,7 @@ function renderChatInfo() {
   $("#ci-editbtn").addEventListener("click", goEdit);
   $$("#ci-body .kvrow, #ci-body .ciblock").forEach(r => r.addEventListener("click", goEdit));
   $("#ci-wb").addEventListener("click", () => openWbBind(real, renderChatInfo));
+  $("#ci-lockface").addEventListener("click", () => xjLockFaceSheet(real));
   $("#ci-beauty").addEventListener("click", openChatBeauty);
   const pin = $("#ci-pin");
   pin.addEventListener("click", () => {
@@ -5597,6 +5604,37 @@ function fileToChatBg(file) {
     const bs = $("#beauty-bg-state");
     if (bs) bs.textContent = "还没设置背景图";
     toast("背景图清掉了");
+  });
+  /* 导出：把当前 CSS（和背景图）存成一个文件 */
+  const ex = $("#beauty-export");
+  if (ex) ex.addEventListener("click", () => {
+    const css = ta.value || "";
+    if (!css.trim() && !CHATBG) { toast("还没有美化可以导出"); return; }
+    const data = { type: "xj-chat-beauty", v: 1, css: css, bg: CHATBG || "" };
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "聊天美化.json"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("聊天美化已导出");
+  });
+  /* 导入：认自己导出的 JSON，也认直接一份 .css / .txt */
+  const im = $("#beauty-import"), imf = $("#beauty-imp-file");
+  if (im && imf) im.addEventListener("click", () => imf.click());
+  if (imf) imf.addEventListener("change", () => {
+    const f = imf.files && imf.files[0]; if (!f) return; imf.value = "";
+    const rd = new FileReader();
+    rd.onload = () => {
+      const txt = String(rd.result || "");
+      let css = txt, bg = null;
+      try { const o = JSON.parse(txt); if (o && typeof o.css === "string") { css = o.css; if (typeof o.bg === "string") bg = o.bg; } else if (o && typeof o === "object") { toast("导入失败：不是聊天美化文件"); return; } } catch (e) {}
+      const go = () => {
+        ta.value = css; CHATCSS = css;
+        try { lsSet("xj_chat_css", CHATCSS); } catch (e) {}
+        if (bg !== null) { CHATBG = bg; try { lsSet("xj_chat_bg", CHATBG); } catch (e) {} applyChatBg(); const bs = $("#beauty-bg-state"); if (bs) bs.textContent = CHATBG ? "已设置背景图（聊天页和预览都会用这张）" : "还没设置背景图"; }
+        applyChatCss(CHATCSS); paintBeautyStage(); toast("聊天美化导入好了");
+      };
+      if ((ta.value || "").trim() && typeof window.xjConfirm === "function") window.xjConfirm("导入会替换现在的美化", "现在写的 CSS 会被换掉", go); else go();
+    };
+    rd.onerror = () => toast("这个文件读不出来");
+    rd.readAsText(f);
   });
   const bk = $("#scr-beauty .navbar [data-back]");
   if (bk) bk.addEventListener("click", () => { applyChatCss(CHATCSS); paintBeautyStage(); });
@@ -7348,15 +7386,31 @@ function b64ToBlob(b64, type) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: type || "image/png" });
 }
-async function genImage(prompt) {
+async function genImage(prompt, opt) {
   const cfg = apis.image || {};
+  const lk = opt && opt.lock && opt.lock.lockFace ? opt.lock : null;
   if (!cfg.url) throw new Error("还没填图片接口地址（设置 → 图片 API 接口）");
   if (!cfg.key) throw new Error("还没填图片接口密钥（设置 → 图片 API 接口）");
-  const r = await fetch(imgApiUrl(cfg.url), {
+  const body = { model: cfg.model || "dall-e-3", prompt: prompt, n: 1, size: "1024x1024" };
+  let pct = 0;
+  if (lk) {
+    pct = xjLockPct(lk);
+    body.prompt = prompt + "\n（参考图是这个人物的脸。画面里的这个人，脸要照着参考图画，相似度约 " + pct + "%。）";
+    body.image = [lk.lockFace];
+    body.strength = pct / 100;
+  }
+  const post = b => fetch(imgApiUrl(cfg.url), {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },
-    body: JSON.stringify({ model: cfg.model || "dall-e-3", prompt: prompt, n: 1, size: "1024x1024" })
+    body: JSON.stringify(b)
   });
+  let r = await post(body);
+  /* 有的接口不收参考图：去掉图再试一次，只带文字里的相似度 */
+  if (!r.ok && lk && r.status !== 401) {
+    const b2 = Object.assign({}, body); delete b2.image; delete b2.strength;
+    const r2 = await post(b2);
+    if (r2.ok) { r = r2; try { toast("这个图片接口不收锁脸图，这次只按文字画了"); } catch (e) {} }
+  }
   if (!r.ok) throw new Error("图片接口返回 " + r.status + (r.status === 401 ? "（密钥不对）" : r.status === 404 ? "（地址或模型名不对）" : ""));
   const j = await r.json();
   const d = j && j.data && j.data[0];
@@ -7369,12 +7423,12 @@ async function genImage(prompt) {
   throw new Error("接口返回里没有图片");
 }
 function aiSheet(onDone) {
-  openSheet('<h3>AI 生图</h3><div class="fld"><label>写下想要的画面，条件越具体越像</label><textarea id="ai-prompt" placeholder="比如：雪夜里一只白猫趴在窗台上，雾灰色调，手机随拍感"></textarea></div><button class="btn" id="ai-go">生成</button><p class="hint">用「设置 → 图片 API 接口」里填的地址、密钥和模型生成。</p>');
+  openSheet('<h3>AI 生图</h3><div class="fld"><label>写下想要的画面，条件越具体越像</label><textarea id="ai-prompt" placeholder="比如：雪夜里一只白猫趴在窗台上，雾灰色调，手机随拍感"></textarea></div><button class="btn" id="ai-go">生成</button><p class="hint">用「设置 → 图片 API 接口」里填的地址、密钥和模型生成。</p>' + (xjLockChar() ? '<p class="hint">已锁脸：会带上 TA 的锁脸图，相似度 ' + xjLockPct(xjLockChar()) + '%。</p>' : ''));
   $("#ai-go").addEventListener("click", async () => {
     const p = $("#ai-prompt").value.trim();
     if (!p) { toast("先写画面描述"); return; }
     const btn = $("#ai-go"); btn.textContent = "正在生成，稍等…";
-    try { const res = await genImage(p); closeSheet(); onDone(res); }
+    try { const res = await genImage(p, { lock: xjLockChar() }); closeSheet(); onDone(res); }
     catch (e) { toast(e.message || "生成失败"); btn.textContent = "生成"; }
   });
 }
@@ -17566,6 +17620,55 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
 #sheet .xjsh-row img{width:40px;height:40px;border-radius:9px;object-fit:cover;flex:none}
 #sheet .xjsh-ar{font-size:12px;color:var(--sub)}
 #sheet .xjsh-tip{font-size:13px;color:var(--sub);text-align:center;padding:14px 0}
+</style>
+<script>
+/* ================= 锁脸：每个角色单独一张脸图 + 相似度，画图时一起发给图片接口 ================= */
+function xjLockPct(c) { const n = Number(c && c.lockFacePct); return isFinite(n) && n >= 0 && n <= 100 ? Math.round(n) : 80; }
+function xjLockLabel(c) { return c && c.lockFace ? "已锁 · " + xjLockPct(c) + "%" : "未设置"; }
+function xjLockChar() {
+  try { const c = curChatChar(); if (!c) return null; const real = CHARS.find(x => x.id === c.id); return real && real.lockFace ? real : null; } catch (e) { return null; }
+}
+function xjShrinkFace(file, max) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { try { const k = Math.min(1, max / Math.max(im.width, im.height)); const cv = document.createElement("canvas"); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height); res(cv.toDataURL("image/jpeg", .86)); } catch (e) { res(""); } URL.revokeObjectURL(url); };
+    im.onerror = () => { res(""); URL.revokeObjectURL(url); };
+    im.src = url;
+  });
+}
+function xjLockFaceSheet(real) {
+  let face = real.lockFace || "", pct = xjLockPct(real);
+  const paint = () => {
+    const box = document.getElementById("lf-face");
+    if (box) box.innerHTML = face ? '<img src="' + face + '" alt="锁脸图" />' : '<span>还没有锁脸图</span>';
+    const v = document.getElementById("lf-pctv"); if (v) v.textContent = pct + "%";
+    const clr = document.getElementById("lf-clear"); if (clr) clr.style.display = face ? "" : "none";
+  };
+  openSheet('<h3>锁脸</h3>' +
+    '<div class="lf-face" id="lf-face"></div>' +
+    '<div class="btnrow"><button class="btn ghost" id="lf-pick" type="button">选一张脸图</button><button class="btn ghost" id="lf-clear" type="button">不用锁脸</button></div>' +
+    '<input type="file" id="lf-file" accept="image/*" hidden />' +
+    '<div class="fld"><label>相似度 <b id="lf-pctv"></b></label><input type="range" id="lf-pct" min="0" max="100" step="5" value="' + pct + '" />' +
+    '<div class="lf-scale"><span>只像一点</span><span>几乎一样</span></div></div>' +
+    '<button class="btn" id="lf-save" type="button">保存</button>' +
+    '<p class="hint">只对 ' + escH(dispName(real)) + ' 生效。在和 TA 的聊天里画图时，会把这张脸图和相似度一起发给图片接口。最好用正脸、清楚、只有一个人的图。</p>');
+  paint();
+  const file = document.getElementById("lf-file");
+  document.getElementById("lf-pick").onclick = () => file.click();
+  file.onchange = async () => { const f = file.files && file.files[0]; if (!f) return; const u = await xjShrinkFace(f, 768); if (u) { face = u; paint(); } else toast("这张图读不出来，换一张试试"); };
+  document.getElementById("lf-pct").oninput = e => { pct = Number(e.target.value) || 0; paint(); };
+  document.getElementById("lf-clear").onclick = () => xjConfirm("确定删除吗？", "删掉这张锁脸图，点保存后生效", () => { face = ""; paint(); });
+  document.getElementById("lf-save").onclick = () => {
+    if (face) { real.lockFace = face; real.lockFacePct = pct; } else { delete real.lockFace; delete real.lockFacePct; }
+    saveChars(); closeSheet(); toast(face ? "锁脸已保存" : "已取消锁脸"); renderChatInfo();
+  };
+}
+</script>
+<style>
+#sheet .lf-face { width: 132px; height: 132px; margin: 4px auto 12px; border-radius: 16px; background: #efeff2; overflow: hidden; display: grid; place-items: center; color: #9a9aa2; font-size: 13px; }
+#sheet .lf-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#sheet .lf-scale { display: flex; justify-content: space-between; font-size: 12px; color: #9a9aa2; margin-top: -2px; }
+#sheet #lf-pctv { font-weight: 600; color: #26262b; margin-left: 4px; }
 </style>
 </body>
 </html>
