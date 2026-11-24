@@ -14991,7 +14991,484 @@ async function sendComplaint(c, r, type, why) {
   const ctx = "被投诉的人：" + who + "\n对方的好友申请记录：\n" + [{ me: false, t: r.msg }].concat(r.thread || []).map(x => (x.me ? "妈妈" : who) + "：" + x.t).join("\n") + "\n投诉类型：" + type + "\n妈妈写的投诉原因：" + why;
   setTimeout(() => charSpeak(d, "妈妈刚刚提交了一条投诉，交给你处理。\n" + ctx + "\n你要认真看申请记录和原因，自己判断是「同意投诉」还是「驳回投诉」（证据不足、理由不成立就驳回，确实被骚扰或欺骗就同意）。不管同意还是驳回，都要用你撒娇可爱的语气告诉妈妈结果和理由，第一条消息里要明确说出「同意」或「驳回」。"), 1200);
 }
-window.__xjAddon = { ensureDanta, dantaOf, sbHideApply, syncPage2Icons, nextPg: next, curlTurn, paintLeaf, mkLeaf, snap, leafPos, tocSet, openAddBook, takeBook, openToc, pickReader, renderSmsList, renderShelf, openBook, openThread, renderNewFriends, openReq, R, SMS, FR, frSave, rSave, smsSave, dput, togOpen, openBookChat, patchContacts };
+
+/* ======================================================================
+   读书记忆：一起读 / 让 TA 读 / 读书会里的内容，微信聊天时 TA 也记得
+   ====================================================================== */
+function readMemo(cid) {
+  const c = charById(cid); if (!c) return "";
+  const out = [];
+  (R.books || []).forEach(b => {
+    const k = readKey(b.id, cid), rd = R.reads[k], tg = R.tog && R.tog[k];
+    if (!(rd && (rd.notes.length || rd.chat.length)) && !(tg && tg.length)) return;
+    const lines = ["《" + b.title + "》"];
+    if (rd && rd.total) lines.push("你自己读到了 " + Math.round(rd.done / Math.max(1, rd.total) * 100) + "%" + (rd.done >= rd.total ? "（已读完）" : "") + "。");
+    if (rd && rd.notes.length) lines.push("你记得的情节：" + rd.notes.slice(-5).map(n => n.f + (n.n ? "（你当时觉得：" + n.n + "）" : "")).join(" "));
+    if (tg && tg.length) lines.push("你们一起看这本书时聊过：" + tg.filter(m => m.x && m.x !== "…").slice(-8).map(m => (m.w === "me" ? "对方" : "你") + "：" + m.x).join(" / "));
+    if (rd && rd.chat.length) lines.push("读书会里聊过：" + rd.chat.slice(-6).map(m => (m.w === "me" ? "对方" : "你") + "：" + m.x).join(" / "));
+    out.push({ t: Math.max(0, ...((rd && rd.chat) || []).map(m => m.t || 0), R.last === b.id ? Date.now() : 0), s: lines.join("\n") });
+  });
+  if (!out.length) return "";
+  out.sort((a, b) => b.t - a.t);
+  let s = out.map(o => o.s).join("\n\n"); if (s.length > 2400) s = s.slice(0, 2400) + "…";
+  return "\n【你们的读书记忆（你真实读过、聊过的，聊天时自然记得，对方提起就能接上；没读到的部分不知道，不要编）】\n" + s;
+}
+(function hookReadMemo() {
+  const o = window.__xjTfSys;
+  window.__xjTfSys = function () {
+    let s = ""; try { s = (o ? o.apply(this, arguments) : "") || ""; } catch (e) {}
+    try { const cc = typeof curChatChar === "function" ? curChatChar() : null; if (cc) s += readMemo(cc.id); } catch (e) {}
+    return s;
+  };
+})();
+
+/* ======================================================================
+   识图 API 接口：单独一行；没填就用聊天 API 接口。
+   图片 / 语音没单独填时，也用聊天 API 接口的地址和密钥（默认接口）
+   ====================================================================== */
+const RAW = { image: apis.image || {}, voice: apis.voice || {}, vision: {} };
+(function loadVision() {
+  let s = null; try { s = JSON.parse(localStorage.getItem(xjFreshKey("xj_apis")) || "null"); } catch (e) {}
+  if (s && s.vision) RAW.vision = s.vision;
+  else if (apis.chat && apis.chat.visionModel) RAW.vision = { model: apis.chat.visionModel };
+})();
+let apiRawView = false; /* 设置页里看到的是自己填的，不是借来的 */
+const hasOwn = v => !!(v && v.url && v.key);
+const borrow = v => { const c = apis.chat || {}; return Object.assign({}, v || {}, { type: c.type, url: c.url || "", key: c.key || "", model: (v && v.model) || "", borrowed: true }); };
+["image", "voice", "vision"].forEach(k => {
+  try {
+    Object.defineProperty(apis, k, { configurable: true, enumerable: false,
+      get() { return (apiRawView || hasOwn(RAW[k])) ? RAW[k] : borrow(RAW[k]); },
+      set(v) { RAW[k] = v || {}; } });
+  } catch (e) {}
+});
+try { Object.defineProperty(apis, "toJSON", { configurable: true, enumerable: false, value: function () { return { chat: this.chat, image: RAW.image, voice: RAW.voice, vision: RAW.vision }; } }); } catch (e) {}
+const saveApis = () => { try { localStorage.setItem(xjFreshKey("xj_apis"), JSON.stringify(apis)); } catch (e) {} };
+/* 设置里加「识图 API 接口」一行，放在语音下面 */
+const VIS_IC = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6.5A2.5 2.5 0 0 1 6.5 4H8M16 4h1.5A2.5 2.5 0 0 1 20 6.5V8M20 16v1.5a2.5 2.5 0 0 1-2.5 2.5H16M8 20H6.5A2.5 2.5 0 0 1 4 17.5V16"/><path d="M7 12s1.8-3.4 5-3.4 5 3.4 5 3.4-1.8 3.4-5 3.4S7 12 7 12z"/><circle cx="12" cy="12" r="1.4"/></svg>';
+try {
+  API_NAMES.vision = "识图 API 接口";
+  API_HINTS.vision = "用来看懂你在聊天里发的图片和表情包，模型要支持图片输入。不填就直接用聊天 API 接口。";
+} catch (e) {}
+(function addVisRow() {
+  const voice = $1('#scr-settings [data-api="voice"]'); if (!voice || $1("#set-visapi")) return;
+  voice.insertAdjacentHTML("afterend", '<button class="row" id="set-visapi"><span class="ric">' + VIS_IC + '</span><span class="rlab">识图 API 接口</span><span class="rval" id="set-visapi-v"></span><span class="chev">›</span></button>');
+  const paint = () => { const v = $1("#set-visapi-v"); if (v) v.textContent = hasOwn(RAW.vision) ? "" : "用聊天接口"; };
+  paint();
+  $1("#set-visapi").addEventListener("click", () => {
+    apiKind = "vision";
+    const v = RAW.vision || {};
+    $1("#api-title").textContent = API_NAMES.vision;
+    const hint = $1("#api-hint"); if (hint) hint.textContent = API_HINTS.vision;
+    $1("#api-url").value = v.url || ""; $1("#api-key").value = v.key || ""; $1("#api-model").value = v.model || "";
+    compatUrlStash = "";
+    setApiType(v.type === "official" ? "official" : "compat", true);
+    const tr = $1("#api-test-result"); if (tr) tr.classList.remove("show");
+    openApp("api");
+  });
+  const sv = $1("#api-save");
+  if (sv) sv.addEventListener("click", () => { setTimeout(() => { saveApis(); paint(); }, 0); });
+  /* 打开图片/语音设置页时显示自己填的（空就是空），不把借来的聊天接口填进去 */
+  $A('#scr-settings [data-api]').forEach(b => b.addEventListener("click", () => { apiRawView = true; setTimeout(() => { apiRawView = false; }, 0); }, true));
+})();
+/* 识图 / 聊天页：页面上单独的「识图模型」一栏不要了，并到识图 API 接口里 */
+(function () { const s = document.createElement("style"); s.textContent = "#xj-vision-setting{display:none!important}"; document.head.appendChild(s); })();
+/* 发图片时：有识图接口就走识图接口，没有就走聊天接口 */
+(function hookVisionFetch() {
+  const of = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    try {
+      if (init && typeof init.body === "string" && init.body.indexOf('"image_url"') >= 0 && apis.chat && apis.chat.url) {
+        const chatUrl = normApiUrl(apis.chat.url), u = typeof input === "string" ? input : (input && input.url);
+        if (u === chatUrl) {
+          const b = JSON.parse(init.body), v = RAW.vision || {};
+          if (hasOwn(v)) {
+            input = normApiUrl(v.url);
+            init = Object.assign({}, init, { headers: Object.assign({}, init.headers || {}, { Authorization: "Bearer " + v.key }) });
+            b.model = v.model || apis.chat.model || "gpt-4o-mini";
+          } else b.model = v.model || apis.chat.model || "gpt-4o-mini";
+          init.body = JSON.stringify(b);
+        }
+      }
+    } catch (e) {}
+    return of(input, init);
+  };
+})();
+
+/* ======================================================================
+   设置页：最上面不放返回键，点大标题「设置」返回；往下翻、顶上出现小标题时才显示返回键
+   ====================================================================== */
+(function () {
+  const s = document.createElement("style");
+  s.textContent = "#scr-settings>.navbar .navbtn[data-back]{opacity:0;pointer-events:none;transition:opacity .2s ease}" +
+    "#scr-settings.xj-scr>.navbar .navbtn[data-back]{opacity:1;pointer-events:auto}" +
+    "#scr-settings>.navbar .ttl{transform:translateY(5px)}" +
+    "#scr-settings .appbody>.bigt{cursor:pointer;-webkit-tap-highlight-color:transparent}";
+  document.head.appendChild(s);
+  const bt = $1("#scr-settings .appbody>.bigt");
+  if (bt) bt.addEventListener("click", e => { if (e.target.closest("[data-back]")) return; const b = bt.querySelector("[data-back]"); if (b) b.click(); });
+})();
+
+/* ======================================================================
+   档案 / 面具资料：短的资料两两排一排；聊天设置里重复的「微信号」一行去掉
+   ====================================================================== */
+(function () {
+  const s = document.createElement("style");
+  s.textContent = "#ci-wxid{display:none!important}" +
+    ".fld2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:10px;margin:0 18px}" +
+    ".fld2>.fld{margin:0 0 12px!important;min-width:0}" +
+    ".fld2>.fld input{width:100%;min-width:0;box-sizing:border-box;text-overflow:ellipsis}";
+  document.head.appendChild(s);
+  const PH = { "cd-wxid": "搜它能找到TA", "cd-remark": "不填用名字", "cd-age": "24岁", "cd-gender": "男 / 女", "cd-birth": "3月14日", "cd-phone": "手机号", "cd-nickname": "小名", "cd-netname": "网上的名字", "cd-callme": "怎么称呼你", "cd-relation": "恋人、朋友", "cd-identity": "战队队长",
+    "me-age": "22岁", "me-gender": "女 / 男", "me-birth": "4月8日", "me-nickname": "小名", "me-netname": "网上的名字", "me-identity": "大学生", "me-job": "插画师", "me-phone": "手机号", "me-name": "你叫什么" };
+  const PAIRS = [["cd-name", "cd-wxid"], ["cd-remark", "cd-nickname"], ["cd-age", "cd-gender"], ["cd-birth", "cd-phone"], ["cd-netname", "cd-callme"], ["cd-relation", "cd-identity"],
+    ["me-name", "me-nickname"], ["me-age", "me-gender"], ["me-birth", "me-netname"], ["me-identity", "me-job"]];
+  function pairUp() {
+    PAIRS.forEach(([a, b]) => {
+      const ia = document.getElementById(a), ib = document.getElementById(b);
+      const fa = ia && ia.closest(".fld"), fb = ib && ib.closest(".fld");
+      if (!fa || !fb || fa === fb || fa.parentNode.classList.contains("fld2") || fb.parentNode.classList.contains("fld2")) return;
+      const w = document.createElement("div"); w.className = "fld2"; fa.parentNode.insertBefore(w, fa); w.appendChild(fa); w.appendChild(fb);
+    });
+    Object.keys(PH).forEach(id => { const el = document.getElementById(id); if (el && el.closest(".fld2")) el.placeholder = PH[id]; });
+  }
+  pairUp();
+  ["#scr-chardetail", "#scr-me"].forEach(q => { const r = $1(q); if (r) new MutationObserver(() => { clearTimeout(pairUp.t); pairUp.t = setTimeout(pairUp, 30); }).observe(r, { childList: true, subtree: true }); });
+})();
+
+/* 识图页：聊天专属的说明和随机性不显示 */
+(function () {
+  const s = document.createElement("style");
+  s.textContent = "#scr-api.xj-vis .appbody>p.hint:first-child,#scr-api.xj-vis .sliderrow{display:none!important}";
+  document.head.appendChild(s);
+  const r = $1("#set-visapi"); if (r) r.addEventListener("click", () => $1("#scr-api").classList.add("xj-vis"), true);
+  $A('#scr-settings [data-api]').forEach(b => b.addEventListener("click", () => $1("#scr-api").classList.remove("xj-vis"), true));
+})();
+
+/* ======================================================================
+   允许 TA 使用我的表情包：聊天设置里开关 + 选分组；
+   先用识图把表情包看一遍记下意思，TA 回复时写【表情包:编号】，这边换成真的那张图
+   ====================================================================== */
+const EMO_DESC_KEY = "xj_emo_desc_v1";
+let EMO_DESC = lsGet(EMO_DESC_KEY, {}); if (!EMO_DESC || typeof EMO_DESC !== "object") EMO_DESC = {};
+const emoHash = s => { let h = 5381; s = String(s || ""); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "e" + (h >>> 0).toString(36) + s.length; };
+const emoGroupsAll = () => { try { return (emoGroups || []).filter(g => g && Array.isArray(g.items)); } catch (e) { return []; } };
+function chatReal() { try { const c = curChatChar(); return c && CHARS.find(x => x.id === c.id) || null; } catch (e) { return null; } }
+function emoPool(c) {
+  if (!c || !c.useEmo) return [];
+  const gs = emoGroupsAll().filter(g => !Array.isArray(c.emoGroups) || c.emoGroups.indexOf(g.name) >= 0);
+  const out = []; gs.forEach(g => g.items.forEach(it => { if (it && it.img) out.push({ img: it.img, g: g.name, name: String(it.name || "").trim() }); }));
+  return out.slice(0, 60);
+}
+async function toDataUrl(src) {
+  if (!/^blob:/.test(src)) return src;
+  try { const bl = await fetch(src).then(r => r.blob()); return await new Promise(res => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || "")); rd.onerror = () => res(""); rd.readAsDataURL(bl); }); } catch (e) { return ""; }
+}
+async function describeEmo(src, name) {
+  const v = hasOwn(RAW.vision) ? RAW.vision : apis.chat; if (!(v && v.url && v.key)) return "";
+  const url = await toDataUrl(src); if (!/^(data:image\/|https?:\/\/)/i.test(url)) return "";
+  try {
+    const r = await fetch(normApiUrl(v.url), { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + v.key },
+      body: JSON.stringify({ model: (RAW.vision && RAW.vision.model) || apis.chat.model || "gpt-4o-mini", max_tokens: 40, temperature: 0.2,
+        messages: [{ role: "user", content: [{ type: "text", text: "这是一张聊天表情包" + (name ? "，主人给它起的名字是「" + name + "」" : "") + "。结合图和名字，用 4 到 12 个字说出它表达的意思或情绪（比如：委屈巴巴求抱抱、无语翻白眼）。图上有字就带上那几个字。只输出这句话。" }, { type: "image_url", image_url: { url: url } }] }] }) });
+    if (!r.ok) return "";
+    const j = await r.json(); return String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").replace(/[\r\n"“”]/g, "").trim().slice(0, 20);
+  } catch (e) { return ""; }
+}
+let emoLearning = false;
+async function learnEmo(c, loud) {
+  if (emoLearning) return; const todo = emoPool(c).filter(e => !EMO_DESC[emoHash(e.img)]);
+  if (!todo.length) { if (loud) tst("表情包都认识了"); return; }
+  if (!chatApiReady() && todo.every(e => e.name)) return;
+  if (!chatApiReady()) { tst("要先接好聊天或识图 API，TA 才看得懂表情包"); return; }
+  emoLearning = true; let ok = 0;
+  for (let i = 0; i < todo.length; i++) {
+    if (loud) tst("TA 正在认识你的表情包 " + (i + 1) + "/" + todo.length);
+    const d = await describeEmo(todo[i].img, todo[i].name);
+    if (d) { EMO_DESC[emoHash(todo[i].img)] = d; ok++; lsSet(EMO_DESC_KEY, EMO_DESC); }
+  }
+  emoLearning = false;
+  if (loud) tst(ok ? "认识好了，TA 会挑合适的发给你" : "没看懂表情包：识图接口没连上，或模型不支持图片");
+  try { renderChatInfo(); } catch (e) {}
+}
+let EMO_MAP = {};
+function emoSys(c) {
+  const pool = emoPool(c); EMO_MAP = {}; if (!pool.length) return "";
+  const lines = []; pool.forEach((e, i) => { const d = EMO_DESC[emoHash(e.img)]; if (!d && !e.name) return; EMO_MAP[i + 1] = e.img; lines.push((i + 1) + ". " + (e.name && d ? e.name + "（" + d + "）" : e.name || d)); });
+  if (!lines.length) return "";
+  return "\n【对方的表情包（你可以用）】\n" + lines.join("\n") + "\n想发表情包时，单独占一行写【表情包:编号】（比如【表情包:3】），对方会收到那张图。符合你的性格和当下情绪才发，一次最多一张，别每次都发；不要描述表情包的内容。";
+}
+(function hookEmoSys() {
+  const o = window.__xjTfSys;
+  window.__xjTfSys = function () { let s = ""; try { s = (o ? o.apply(this, arguments) : "") || ""; } catch (e) {} try { s += emoSys(chatReal()); } catch (e) {} return s; };
+})();
+/* 把回复里的【表情包:N】换成那张图 */
+const EMO_RE = /[【\[]\s*表情包\s*[:：]\s*(\d+)\s*[】\]]/g;
+function swapEmo() {
+  let changed = false;
+  $A("#msgs .msg:not(.me) .bub").forEach(bub => {
+    if (bub.querySelector(".typing")) return;
+    const t = bub.textContent || ""; EMO_RE.lastIndex = 0; if (!EMO_RE.test(t)) return;
+    const ids = []; t.replace(EMO_RE, (m, n) => { ids.push(+n); return m; });
+    const rest = t.replace(EMO_RE, "").trim();
+    const imgs = ids.map(n => EMO_MAP[n]).filter(Boolean);
+    const msg = bub.closest(".msg");
+    if (!rest) {
+      if (imgs.length) bub.innerHTML = '<img class="sticker" src="' + H(imgs[0]) + '" alt="表情包" />'; else msg.remove();
+    } else {
+      bub.textContent = rest;
+      if (imgs.length) { const d = msg.cloneNode(true); d.querySelector(".bub").innerHTML = '<img class="sticker" src="' + H(imgs[0]) + '" alt="表情包" />'; msg.after(d); }
+    }
+    changed = true;
+  });
+  if (changed) setTimeout(() => { try { window.__xjChatStore && window.__xjChatStore.save(); } catch (e) {} }, 50);
+}
+(function () { const m = $1("#msgs"); if (m) new MutationObserver(() => { clearTimeout(swapEmo.t); swapEmo.t = setTimeout(swapEmo, 20); }).observe(m, { childList: true, subtree: true, characterData: true }); })();
+/* 聊天设置里的开关和分组 */
+/* 选分组：独立页，每组一张卡（名字 + 前八个预览），点卡片选/不选，右上角全选/取消全选 */
+let EGP_C = null;
+(function () {
+  const s = document.createElement("style");
+  s.textContent = "#egp-body{padding:12px 16px 40px}.egp-card{display:block;width:100%;text-align:left;background:var(--card,#fff);border-radius:18px;padding:14px 14px 12px;margin-bottom:12px;box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow .15s}" +
+    ".egp-card.on{box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.55)}.phone[data-theme=\"dark\"] .egp-card.on{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}" +
+    ".egp-h{display:flex;align-items:center;gap:8px;margin-bottom:10px}.egp-n{font-size:15.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.egp-c{font-size:12.5px;color:var(--sub)}" +
+    ".egp-g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.egp-g span{aspect-ratio:1;border-radius:10px;background:var(--card2,#f0f0f2);overflow:hidden;display:grid;place-items:center;font-size:22px}.egp-g img{width:100%;height:100%;object-fit:contain;display:block}" +
+    ".egp-e{font-size:12.5px;color:var(--sub);padding:6px 0 2px}#egp-all{font-size:15px;width:auto;padding:0 4px;white-space:nowrap}.egp-tip{font-size:12.5px;color:var(--sub);margin:0 2px 12px}";
+  document.head.appendChild(s);
+  const host = document.getElementById("scr-chardetail") || document.querySelector(".phone .screen:last-of-type");
+  const scr = document.createElement("section"); scr.className = "screen"; scr.id = "scr-egpick";
+  scr.innerHTML = '<div class="statusbar"><span class="js-time">' + ((document.querySelector(".js-time") || {}).textContent || "") + '</span><span class="sicons" data-sig>' + (((document.querySelector(".sicons[data-sig]") || {}).innerHTML) || "") + '</span></div>' +
+    '<div class="navbar"><button class="navbtn" data-back aria-label="返回">‹</button><div class="ttl">可用的表情包</div><button class="navbtn" id="egp-all">全选</button></div>' +
+    '<div class="appbody" id="egp-body"></div><div class="homebar dark"><i></i></div>';
+  host.parentNode.insertBefore(scr, host.nextSibling);
+  document.getElementById("egp-all").onclick = () => {
+    const c = EGP_C; if (!c) return; const all = emoGroupsAll().map(g => g.name);
+    const sel = Array.isArray(c.emoGroups) ? c.emoGroups : all;
+    c.emoGroups = all.every(n => sel.indexOf(n) >= 0) ? [] : all.slice(); saveChars(); renderEGP();
+  };
+  /* 离开这一页时再去认表情、刷新聊天设置 */
+  new MutationObserver(() => { if (EGP_C && !scr.classList.contains("active")) { const c = EGP_C; EGP_C = null; try { renderChatInfo(); } catch (e) {} learnEmo(c, true); } }).observe(scr, { attributes: true, attributeFilter: ["class"] });
+})();
+function renderEGP() {
+  const c = EGP_C; if (!c) return; const all = emoGroupsAll();
+  const sel = Array.isArray(c.emoGroups) ? c.emoGroups : all.map(g => g.name);
+  const allOn = all.length && all.every(g => sel.indexOf(g.name) >= 0);
+  document.getElementById("egp-all").textContent = allOn ? "取消全选" : "全选";
+  document.getElementById("egp-body").innerHTML = '<div class="egp-tip">点一组就选上，再点取消。已选 ' + all.filter(g => sel.indexOf(g.name) >= 0).length + "/" + all.length + " 组</div>" +
+    all.map((g, i) => { const it = g.items.filter(x => x); const on = sel.indexOf(g.name) >= 0;
+      return '<button class="egp-card' + (on ? " on" : "") + '" data-i="' + i + '"><div class="egp-h"><span class="egp-n">' + H(g.name) + '</span><span class="egp-c">' + it.length + ' 个</span><span class="xj-ck' + (on ? " on" : "") + '"></span></div>' +
+        (it.length ? '<div class="egp-g">' + it.slice(0, 8).map(x => "<span>" + (x.img ? '<img src="' + H(x.img) + '" alt="" loading="lazy" />' : H(x.t || "")) + "</span>").join("") + "</div>" : '<div class="egp-e">还没有表情</div>') + "</button>"; }).join("");
+  $A("#egp-body .egp-card").forEach(b => b.onclick = () => {
+    const g = all[+b.dataset.i]; let s = Array.isArray(c.emoGroups) ? c.emoGroups.slice() : all.map(x => x.name);
+    const k = s.indexOf(g.name); if (k >= 0) s.splice(k, 1); else s.push(g.name);
+    c.emoGroups = s; saveChars(); renderEGP();
+  });
+}
+function emoGroupSheet(c) {
+  if (!emoGroupsAll().length) { tst("你还没有表情包分组，先去表情里建一个"); return; }
+  EGP_C = c; renderEGP(); openApp("egpick");
+}
+function emoGroupSheetOld(c) {
+  const all = emoGroupsAll(); if (!all.length) { tst("你还没有表情包分组，先去表情里建一个"); return; }
+  let sel = Array.isArray(c.emoGroups) ? c.emoGroups.slice() : all.map(g => g.name);
+  const paint = () => {
+    openSheet("<h3>TA 能用哪些表情包</h3>" + all.map(g => '<button type="button" class="row xj-eg" data-g="' + H(g.name) + '"><span class="rlab">' + H(g.name) + '</span><span class="rval">' + g.items.filter(i => i && i.img).length + ' 张</span><span class="xj-ck' + (sel.indexOf(g.name) >= 0 ? " on" : "") + '"></span></button>').join("") +
+      '<button class="btn" id="xj-eg-ok" style="margin-top:14px">好了</button>');
+    $A("#sheet .xj-eg").forEach(b => b.onclick = () => { const n = b.dataset.g, i = sel.indexOf(n); if (i >= 0) sel.splice(i, 1); else sel.push(n); paint(); });
+    $1("#xj-eg-ok").onclick = () => { c.emoGroups = sel; saveChars(); closeSheet(); try { renderChatInfo(); } catch (e) {} learnEmo(c, true); };
+  };
+  paint();
+}
+(function () {
+  const s = document.createElement("style");
+  s.textContent = ".xj-ck{width:20px;height:20px;border-radius:50%;border:1.5px solid #c7c7cc;box-sizing:border-box;flex:none;margin-left:10px}.xj-ck.on{border:6px solid #1c1c1e}.phone[data-theme=\"dark\"] .xj-ck.on{border-color:#eee}";
+  document.head.appendChild(s);
+  if (typeof renderChatInfo !== "function") return;
+  const o = renderChatInfo;
+  renderChatInfo = function () {
+    const r = o.apply(this, arguments);
+    const c = chatReal(), anchor = document.getElementById("ci-tr"); const row = anchor && anchor.closest(".row");
+    if (!c || !row || document.getElementById("ci-emo")) return r;
+    const all = emoGroupsAll(), sel = Array.isArray(c.emoGroups) ? all.filter(g => c.emoGroups.indexOf(g.name) >= 0) : all;
+    const n = emoPool(c).length, known = emoPool(c).filter(e => e.name || EMO_DESC[emoHash(e.img)]).length;
+    row.insertAdjacentHTML("beforebegin",
+      '<div class="row"><span class="rlab">允许TA使用我的表情包</span><button class="swbtn" id="ci-emo" role="switch" aria-checked="' + (c.useEmo ? "true" : "false") + '" aria-label="允许TA使用我的表情包"><i></i></button></div>' +
+      (c.useEmo ? '<button class="row" id="ci-emog"><span class="rlab">可用的表情包分组</span><span class="rval">' + (sel.length ? (sel.length === all.length ? "全部" : H(sel.map(g => g.name).join("、"))) + " · " + known + "/" + n + " 张" : "没选") + '</span><span class="chev">›</span></button>' : ""));
+    document.getElementById("ci-emo").addEventListener("click", () => { c.useEmo = !c.useEmo; saveChars(); renderChatInfo(); if (c.useEmo) { tst("开了，TA 可以给你发你的表情包"); learnEmo(c, true); } else tst("关了"); });
+    const g = document.getElementById("ci-emog"); if (g) g.addEventListener("click", () => emoGroupSheet(c));
+    return r;
+  };
+})();
+
+/* ======================================================================
+   表情分组独立页：点分组进去，右上角＋导入（图片 / 单个链接 / 名字：链接 批量）
+   每个表情可以起名字（就是它的意思），名字和图一起给 AI
+   ====================================================================== */
+(function () {
+  const s = document.createElement("style");
+  s.textContent = [
+    "#emog-body{padding:14px 16px 40px}","#emoimp-body{padding:16px 16px 40px}",
+    ".eg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 12px}",
+    ".eg-it{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;background:none;min-width:0}",
+    ".eg-it .eg-im{width:100%;aspect-ratio:1;border-radius:14px;background:var(--card);overflow:hidden;display:grid;place-items:center}",
+    ".eg-it .eg-im img{width:100%;height:100%;object-fit:contain;display:block}",
+    ".eg-it .eg-n{font-size:11.5px;color:var(--sub);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}",
+    ".eg-it .eg-n.no{opacity:.45}",
+    ".eg-empty{text-align:center;color:var(--sub);font-size:13.5px;padding:80px 0 20px;line-height:1.8}",
+    ".eg-foot{display:flex;justify-content:center;gap:26px;margin-top:34px}",
+    ".eg-foot button{background:none;font-size:13.5px;color:var(--sub);padding:6px}",
+    ".eg-it{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.eg-it img{-webkit-touch-callout:none;pointer-events:none}.eg-actpv{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 16px}.eg-actpv img{width:110px;height:110px;object-fit:contain;border-radius:14px}.eg-actpv span{font-size:13px;color:var(--sub)}.btn.danger{color:#d0453b!important}",".eg-cnt{font-size:12.5px;color:var(--sub);margin:0 2px 12px;display:flex;align-items:center;gap:8px}",".eg-cnt>span:first-child{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",".eg-tools{display:flex;gap:14px;flex:none}",".eg-tools button{background:none;padding:2px 0;font-size:12.5px;color:var(--sub)}",".eg-tools #eg-del{color:#c0453f}",
+    ".eg-pv{width:132px;height:132px;border-radius:18px;overflow:hidden;margin:6px auto 14px;background:var(--card)}",
+    ".eg-pv img{width:100%;height:100%;object-fit:contain;display:block}",
+    ".eg-seg{display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:14px}",
+    ".eg-seg button{flex:1;height:34px;border-radius:9px;background:none;font-size:14px;color:var(--sub)}",
+    ".eg-seg button.on{background:var(--bg,#fff);color:var(--ink,#1c1c1e);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.08)}",
+    "#emog-add{font-size:26px;font-weight:300}"
+  ].join("");
+  document.head.appendChild(s);
+  const host = document.getElementById("scr-wxemo") || document.querySelector(".phone .screen:last-of-type");
+  const scr = document.createElement("section"); scr.className = "screen"; scr.id = "scr-emog";
+  scr.innerHTML = '<div class="statusbar"><span class="js-time">' + ((document.querySelector(".js-time") || {}).textContent || "") + '</span><span class="sicons" data-sig>' + (((document.querySelector(".sicons[data-sig]") || {}).innerHTML) || "") + '</span></div>' +
+    '<div class="navbar"><button class="navbtn" data-back aria-label="返回">‹</button><div class="ttl" id="emog-ttl">表情</div><button class="navbtn" id="emog-add" aria-label="导入表情">＋</button></div>' +
+    '<div class="appbody" id="emog-body"></div><div class="homebar dark"><i></i></div>';
+  host.parentNode.insertBefore(scr, host.nextSibling);
+  const imp = document.createElement("section"); imp.className = "screen"; imp.id = "scr-emoimp";
+  imp.innerHTML = scr.innerHTML.replace('id="emog-ttl">表情', 'id="emoimp-ttl">导入表情').replace(/<button class="navbtn" id="emog-add"[^>]*>＋<\/button>/, '<span style="width:38px"></span>').replace('id="emog-body"', 'id="emoimp-body"');
+  scr.parentNode.insertBefore(imp, scr.nextSibling);
+  let GI = 0;
+  const G = () => emoGroups[GI];
+  const save = () => { saveEmo(); try { renderEmo(); } catch (e) {} };
+  function render() {
+    const g = G(); if (!g) return;
+    document.getElementById("emog-ttl").textContent = g.name;
+    const items = g.items;
+    const TOOLS = '<span class="eg-tools"><button id="eg-ren">改名字</button><button id="eg-del">删除分组</button></span>';
+    document.getElementById("emog-body").innerHTML = (items.length
+      ? '<div class="eg-cnt"><span>' + items.length + ' 个 · 长按可以改名字或删除</span>' + TOOLS + '</div><div class="eg-grid">' + items.map((it, i) => '<button class="eg-it" data-i="' + i + '"><span class="eg-im">' + (it.img ? '<img src="' + H(it.img) + '" alt="" loading="lazy" />' : '<span style="font-size:28px">' + H(it.t || "") + "</span>") + '</span><span class="eg-n' + (it.name ? "" : " no") + '">' + H(it.name || "未命名") + "</span></button>").join("") + "</div>"
+      : '<div class="eg-cnt"><span>0 个</span>' + TOOLS + '</div><div class="eg-empty">这个分组还没有表情<br />点右上角＋导入</div>');
+    $A("#emog-body .eg-it").forEach(b => {
+      let t = null, sx = 0, sy = 0;
+      b.addEventListener("touchstart", e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; b.__lp = false; t = setTimeout(() => { t = null; b.__lp = true; try { navigator.vibrate && navigator.vibrate(10); } catch (x) {} actSheet(+b.dataset.i); }, 480); }, { passive: true });
+      b.addEventListener("touchmove", e => { const q = e.touches[0]; if (t && (Math.abs(q.clientX - sx) > 8 || Math.abs(q.clientY - sy) > 8)) { clearTimeout(t); t = null; } }, { passive: true });
+      ["touchend", "touchcancel"].forEach(n => b.addEventListener(n, () => { if (t) clearTimeout(t); t = null; }, { passive: true }));
+      b.addEventListener("contextmenu", e => { e.preventDefault(); if (!b.__lp) actSheet(+b.dataset.i); });
+      b.onclick = e => { if (b.__lp) { b.__lp = false; e.preventDefault(); return; } viewSheet(+b.dataset.i); };
+    });
+    document.getElementById("eg-ren").onclick = () => {
+      openSheet('<h3>改分组名字</h3><div class="fld"><input id="eg-nn" type="text" value="' + H(g.name) + '" /></div><button class="btn" id="eg-nok">保存</button>');
+      document.getElementById("eg-nok").onclick = () => { const v = document.getElementById("eg-nn").value.trim(); if (!v) return; if (emoGroups.some((x, k) => k !== GI && x.name === v)) { tst("已经有这个分组了"); return; } g.name = v; save(); closeSheet(); render(); };
+    };
+    document.getElementById("eg-del").onclick = function () {
+      emoGroups.splice(GI, 1); try { emoCur = 0; } catch (e) {} save(); goBack(); tst("分组删掉了");
+    };
+  }
+  function viewSheet(i) {
+    const it = G().items[i]; if (!it) return;
+    openSheet('<div class="eg-pv">' + (it.img ? '<img src="' + H(it.img) + '" alt="" />' : "") + '</div><p class="hint" style="text-align:center">' + H(it.name || "未命名") + '</p>');
+  }
+  function actSheet(i) {
+    const it = G().items[i]; if (!it) return;
+    openSheet('<div class="eg-act"><div class="eg-actpv">' + (it.img ? '<img src="' + H(it.img) + '" alt="" />' : "") + '<span>' + H(it.name || "未命名") + '</span></div><button class="btn" id="eg-aren">改名字</button><button class="btn ghost danger" id="eg-adel">删除这个表情</button><button class="btn ghost" id="eg-acan">取消</button></div>');
+    document.getElementById("eg-aren").onclick = () => itemSheet(i);
+    document.getElementById("eg-adel").onclick = () => { G().items.splice(i, 1); save(); closeSheet(); render(); tst("删掉了"); };
+    document.getElementById("eg-acan").onclick = () => closeSheet();
+  }
+  function itemSheet(i) {
+    const it = G().items[i]; if (!it) return;
+    openSheet('<h3>改名字</h3><div class="eg-pv">' + (it.img ? '<img src="' + H(it.img) + '" alt="" />' : "") + '</div>' +
+      '<div class="fld"><label>名字（它的意思，TA 会照这个理解）</label><input id="eg-in" type="text" value="' + H(it.name || "") + '" /></div>' +
+      '<button class="btn" id="eg-iok">保存</button><button class="btn ghost" id="eg-ican">取消</button>');
+    document.getElementById("eg-iok").onclick = () => { const v = document.getElementById("eg-in").value.trim(); if (v) it.name = v; else delete it.name; if (it.img) delete EMO_DESC[emoHash(it.img)]; save(); closeSheet(); render(); };
+    document.getElementById("eg-ican").onclick = () => closeSheet();
+  }
+  /* 原图原样存，不缩小、不压缩（动图也保持会动） */
+  function shrinkImg(file) {
+    return new Promise(res => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || "")); rd.onerror = () => res(""); rd.readAsDataURL(file); });
+  }
+  const pick = multi => new Promise(res => { const x = document.createElement("input"); x.type = "file"; x.accept = "image/*"; x.multiple = !!multi; x.onchange = () => res(Array.from(x.files || [])); x.click(); });
+  const okLink = u => /^data:image\//i.test(u) || /^https?:\/\/\S+$/i.test(u);
+  /* 名字：链接，一行一个；只有链接的也收，名字留空 */
+  function parseLines(text) {
+    const out = [];
+    String(text || "").split(/\r?\n/).forEach(line => {
+      line = line.trim(); if (!line) return;
+      const m = line.match(/(https?:\/\/\S+|data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+)/i); if (!m) return;
+      const url = m[1].replace(/[，。；、,;]+$/, "");
+      let name = line.slice(0, m.index).replace(/[:：\s\-—=|]+$/, "").trim();
+      if (!name) name = line.slice(m.index + m[1].length).replace(/^[:：\s\-—=|]+/, "").trim();
+      if (okLink(url)) out.push({ img: url, name: name.slice(0, 30) });
+    });
+    return out;
+  }
+  function importSheet(tab) {
+    tab = tab || "one"; let pendingImg = "";
+    const seg = '<div class="eg-seg"><button data-t="one"' + (tab === "one" ? ' class="on"' : "") + '>单个导入</button><button data-t="many"' + (tab === "many" ? ' class="on"' : "") + '>链接批量</button><button data-t="pics"' + (tab === "pics" ? ' class="on"' : "") + '>相册多选</button></div>';
+    let body = "";
+    if (tab === "one") body = '<div class="eg-pv" id="eg-opv" style="display:none"></div><div class="fld"><label>图片链接</label><input id="eg-ourl" type="url" inputmode="url" autocomplete="off" /></div><button class="btn ghost" id="eg-opick">或者从相册选一张</button><div class="fld"><label>名字（它的意思）</label><input id="eg-oname" type="text" /></div><button class="btn" id="eg-ook">导入</button>';
+    if (tab === "many") body = '<div class="fld"><label>一行一个：表情包名字：链接</label><textarea id="eg-mtxt" rows="7"></textarea></div><button class="btn" id="eg-mok">读取并导入</button><button class="btn ghost" id="eg-mdoc">从文档读取（txt）</button><p class="hint">每行的名字会配给同一行的链接。没写名字的也会导入，之后点开可以补。</p>';
+    if (tab === "pics") body = '<button class="btn" id="eg-ppick">从相册选图片（可多选）</button><p class="hint">导入后点开每一个可以起名字。</p>';
+    document.getElementById("emoimp-ttl").textContent = "导入到「" + G().name + "」";
+    document.getElementById("emoimp-body").innerHTML = seg + body;
+    if (!document.getElementById("scr-emoimp").classList.contains("active")) openApp("emoimp");
+    $A("#emoimp-body .eg-seg button").forEach(b => b.onclick = () => importSheet(b.dataset.t));
+    const done = n => { save(); goBack(); render(); tst("导入了 " + n + " 个表情"); };
+    if (tab === "one") {
+      const pv = document.getElementById("eg-opv");
+      const show = src => { pv.style.display = src ? "" : "none"; pv.innerHTML = src ? '<img src="' + H(src) + '" alt="" />' : ""; };
+      document.getElementById("eg-ourl").oninput = e => { pendingImg = ""; const v = e.target.value.trim(); show(okLink(v) ? v : ""); };
+      document.getElementById("eg-opick").onclick = async () => { const f = (await pick(false))[0]; if (!f) return; pendingImg = await shrinkImg(f); document.getElementById("eg-ourl").value = ""; show(pendingImg); };
+      document.getElementById("eg-ook").onclick = () => {
+        const u = pendingImg || document.getElementById("eg-ourl").value.trim();
+        if (!u || !okLink(u)) { tst("先放一张图片或图片链接"); return; }
+        const it = { img: u }; const n = document.getElementById("eg-oname").value.trim(); if (n) it.name = n.slice(0, 30);
+        G().items.push(it); done(1);
+      };
+    }
+    if (tab === "many") {
+      const go = t => { const list = parseLines(t); if (!list.length) { tst("没读到能用的图片链接"); return; } list.forEach(x => { const it = { img: x.img }; if (x.name) it.name = x.name; G().items.push(it); }); done(list.length); };
+      document.getElementById("eg-mok").onclick = () => go(document.getElementById("eg-mtxt").value);
+      document.getElementById("eg-mdoc").onclick = () => { const x = document.createElement("input"); x.type = "file"; x.accept = ".txt,.json,text/plain"; x.onchange = () => { const f = x.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => go(String(rd.result || "")); rd.readAsText(f); }; x.click(); };
+    }
+    if (tab === "pics") document.getElementById("eg-ppick").onclick = async () => { const fs = await pick(true); if (!fs.length) return; let n = 0; for (const f of fs) { const d = await shrinkImg(f); if (d) { G().items.push({ img: d }); n++; } } done(n); };
+  }
+  document.getElementById("emog-add").onclick = () => importSheet("one");
+  function openGroup(i) { if (!emoGroups[i]) return; GI = i; render(); openApp("emog"); }
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("#wxemo-body [data-eg]"); if (!b) return;
+    e.stopPropagation(); e.preventDefault(); openGroup(+b.dataset.eg);
+  }, true);
+  /* 新建分组后直接进它的页面，不再弹老的导入框 */
+  const oldImp = window.emoImportSheet;
+  try { emoImportSheet = function () { if (!emoGroups[emoCur]) return oldImp.apply(this, arguments); const w = document.getElementById("scr-wxemo"); try { closeSheet(); } catch (e) {} if (w && w.classList.contains("active")) { openGroup(emoCur); setTimeout(() => importSheet("one"), 350); return; } GI = emoCur; importSheet("one"); }; } catch (e) {}
+  /* 发出去的表情带上名字，TA 那边看得到意思 */
+  const nameOf = src => { for (const g of emoGroups) for (const it of g.items) if (it.img === src && it.name) return it.name; return ""; };
+  new MutationObserver(() => $A('#msgs .msg.me img.sticker[alt="表情包"]').forEach(im => { const n = nameOf(im.getAttribute("src")); if (n) im.setAttribute("alt", "表情包：" + n); })).observe(document.getElementById("msgs"), { childList: true, subtree: true });
+  /* 聊天表情面板：选中的分组淡黑描边；自己的分组第一格是＋，点了进导入页 */
+  const st2 = document.createElement("style");
+  st2.textContent = "#emo-tabs .emotab.on{box-shadow:inset 0 0 0 1.2px rgba(0,0,0,.42)}.phone[data-theme=\"dark\"] #emo-tabs .emotab.on{box-shadow:inset 0 0 0 1.2px rgba(255,255,255,.5)}#emo-import{display:none!important}" +
+    "#emo-panel.open{display:flex!important;flex-direction:column;height:300px;box-sizing:border-box;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))}#emo-panel .emotabs{flex:none}#emo-grid{flex:1 1 auto;min-height:0;max-height:none!important;overflow-y:auto;align-content:start;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:14px}" +
+    "#emo-grid{container-type:inline-size}#emo-grid:not(.kaogrid) button{height:calc((100cqw - 30px) / 4)!important}#emo-grid button{position:relative}#emo-grid button img{position:absolute;left:0;top:0;width:100%!important;height:100%!important;object-fit:contain!important}#sheet .emogrid button img{object-fit:contain!important}#emo-grid .eg-addtile{background:transparent!important;border:1.3px dashed rgba(0,0,0,.28);color:rgba(0,0,0,.45);font-size:28px;font-weight:300;line-height:1}.phone[data-theme=\"dark\"] #emo-grid .eg-addtile{border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.5)}";
+  document.head.appendChild(st2);
+  if (typeof renderEmo === "function") {
+    const oR = renderEmo;
+    renderEmo = function () {
+      const r = oR.apply(this, arguments);
+      try {
+        const on = document.querySelector("#emo-tabs .emotab.on"), v = on && on.dataset.etab;
+        if (v != null && /^\d+$/.test(v) && emoGroups[+v]) {
+          const grid = document.getElementById("emo-grid");
+          Array.from(grid.children).forEach(ch => { if (!ch.matches("[data-emo]")) ch.remove(); });
+          grid.insertAdjacentHTML("afterbegin", '<button type="button" class="eg-addtile" aria-label="导入表情">＋</button>');
+          grid.querySelector(".eg-addtile").onclick = e => { e.stopPropagation(); GI = +v; try { emoCur = +v; } catch (x) {} importSheet("one"); };
+        }
+      } catch (e) {}
+      return r;
+    };
+  }
+  window.__xjEmoGroup = { openGroup, importSheet, parseLines };
+})();
+
+window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, dantaOf, sbHideApply, syncPage2Icons, nextPg: next, curlTurn, paintLeaf, mkLeaf, snap, leafPos, tocSet, openAddBook, takeBook, openToc, pickReader, renderSmsList, renderShelf, openBook, openThread, renderNewFriends, openReq, R, SMS, FR, frSave, rSave, smsSave, dput, togOpen, openBookChat, patchContacts };
 })();
 
 </script>
