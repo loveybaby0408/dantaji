@@ -6197,7 +6197,7 @@ function parseCharCard(text) {
     if (j && typeof j === "object") {
       out.name = j.name || "";
       out.age = j.age != null ? String(j.age) : "";
-      out.gender = j.gender || "";
+      out.gender = normGender(j.gender || j.sex || "") || sniffGender([j.description, j.personality, j.scenario].filter(Boolean).join("\n"));
       out.examples = j.mes_example || "";
       const parts = [];
       if (j.description) parts.push(j.description);
@@ -6214,6 +6214,7 @@ function parseCharCard(text) {
     }
   } catch (e) {}
   out.persona = text; /* 纯文本：整段当人设正文 */
+  out.gender = sniffGender(text);
   const firstLine = text.split(/\n/).map(s => s.trim()).filter(Boolean)[0];
   if (firstLine && firstLine.length <= 20) out.name = firstLine.replace(/^名字[:：]?\s*/, "");
   return out;
@@ -6498,8 +6499,8 @@ $("#cd-save").addEventListener("click", () => {
 });
 
 /* ---------- 完整设定 → AI 帮忙填写：把一整段设定自动分类到十个框里 ---------- */
-const FULL_KEYS = ["name", "age", "nickname", "netname", "sign", "persona", "looks", "personality", "catch", "exp", "examples"];
-const FULL_LABELS = { "名字": "name", "姓名": "name", "年龄": "age", "昵称": "nickname", "小名": "nickname", "网名": "netname", "个签": "sign", "签名": "sign", "整体设定": "persona", "设定": "persona", "人设": "persona", "外貌描写": "looks", "外貌": "looks", "长相": "looks", "性格描写": "personality", "性格": "personality", "口头禅": "catch", "成长经历": "exp", "经历": "exp", "背景": "exp", "身份背景": "persona", "身份": "persona", "对话示例": "examples", "对话": "examples", "示例": "examples", "台词": "examples" };
+const FULL_KEYS = ["name", "age", "gender", "birth", "identity", "job", "phone", "callme", "relation", "nickname", "netname", "sign", "persona", "looks", "personality", "catch", "exp", "examples"];
+const FULL_LABELS = { "名字": "name", "姓名": "name", "年龄": "age", "性别": "gender", "性別": "gender", "生日": "birth", "出生日期": "birth", "职业": "job", "工作": "job", "手机号": "phone", "电话": "phone", "手机": "phone", "称呼": "callme", "称呼你": "callme", "关系": "relation", "与你关系": "relation", "昵称": "nickname", "小名": "nickname", "网名": "netname", "个签": "sign", "签名": "sign", "整体设定": "persona", "设定": "persona", "人设": "persona", "外貌描写": "looks", "外貌": "looks", "长相": "looks", "性格描写": "personality", "性格": "personality", "口头禅": "catch", "成长经历": "exp", "经历": "exp", "背景": "exp", "身份背景": "persona", "身份": "identity", "对话示例": "examples", "对话": "examples", "示例": "examples", "台词": "examples" };
 /* 没接 API 时也能按「标签：内容」一行一项先分好 */
 function localParseFull(text) {
   const out = {}; let last = "";
@@ -6524,8 +6525,24 @@ function localParseFull(text) {
   Object.keys(out).forEach(k => { out[k] = out[k].trim(); if (!out[k]) delete out[k]; });
   return out;
 }
+/* 性别统一成「男 / 女」，认不出的原样保留 */
+function normGender(v) {
+  const t = String(v || "").trim(); if (!t) return "";
+  if (/^(女|女性|女生|女孩|女孩子|妹子|female|f|woman|girl|♀)$/i.test(t)) return "女";
+  if (/^(男|男性|男生|男孩|男孩子|male|m|man|boy|♂)$/i.test(t)) return "男";
+  return t;
+}
+/* 没写成「性别：x」一行时，从整段里找性别 */
+function sniffGender(text) {
+  const s = String(text || "");
+  let m = /性[别別]\s*[：:为是\s]?\s*(男|女|[^\s，。,.;；、\n]{1,6})/.exec(s); if (m) return normGender(m[1]);
+  m = /(^|[\s，。,；;、\(（])(男|女)(性|生|孩)?([\s，。,；;、\)）]|$)/.exec(s); if (m) return m[2];
+  if (/\b(female|she\/her)\b/i.test(s)) return "女";
+  if (/\b(male|he\/him)\b/i.test(s)) return "男";
+  return "";
+}
 async function aiClassifyFull(text) {
-  const sys = "你是一个设定分类助手。把用户给的完整人物设定拆开，只输出一个 JSON 对象，不要任何解释、不要代码块。字段固定为：name（名字）、age（年龄）、nickname（昵称/小名）、netname（网名）、sign（个签/一句话签名）、persona（整体设定：身份、背景、关系、说话方式等剩下的综合设定）、looks（外貌描写）、personality（性格描写）、catch（口头禅）、exp（成长经历）、examples（对话示例）。原文里没有的字段给空字符串，不要编造原文没有的信息。";
+  const sys = "你是一个设定分类助手。把用户给的完整人物设定拆开，只输出一个 JSON 对象，不要任何解释、不要代码块。字段固定为：name（名字）、age（年龄）、gender（性别，只填「男」或「女」；原文写了男性/女性/男生/女孩/他/她等都要换成「男」或「女」，原文明确是其他性别就照原文写）、birth（生日）、identity（身份，几个字，如大学生、战队队长）、job（职业）、phone（手机号）、callme（角色怎么称呼对方）、relation（和对方的关系）、nickname（昵称/小名）、netname（网名）、sign（个签/一句话签名）、persona（整体设定：身份、背景、关系、说话方式等剩下的综合设定）、looks（外貌描写）、personality（性格描写）、catch（口头禅）、exp（成长经历）、examples（对话示例）。原文里没有的字段给空字符串，不要编造原文没有的信息；但性别只要原文能看出来（包括用「他/她」指代本人），就一定要填 gender。";
   let raw = null;
   if (window.rain && typeof window.rain.ai === "function") {
     raw = await window.rain.ai("完整设定：\n" + text, { system: sys, max: 1400 });
@@ -6553,6 +6570,8 @@ async function fillFromFull(text, apply, btn) {
   let ai = null;
   if (typeof chatApiReady === "function" && chatApiReady()) { try { ai = await aiClassifyFull(text); } catch (e) {} }
   if (ai) data = Object.assign({}, data, ai);
+  data.gender = normGender(data.gender) || sniffGender(text);
+  if (!data.gender) delete data.gender;
   btn.disabled = false; btn.textContent = old;
   const keys = Object.keys(data).filter(k => data[k]);
   if (!keys.length) { toast("没分出来：先去设置里接聊天 API，或者把设定按「名字：…」一行一项写好再点"); return; }
@@ -6562,7 +6581,7 @@ async function fillFromFull(text, apply, btn) {
 function applyFullTo(ids, data) {
   FULL_KEYS.forEach(k => { const el = $(ids[k]); if (el && data[k]) el.value = data[k]; });
 }
-$("#cd-aifill").addEventListener("click", () => fillFromFull($("#cd-full").value, d => applyFullTo({ name: "#cd-name", age: "#cd-age", nickname: "#cd-nickname", netname: "#cd-netname", sign: "#cd-sign", persona: "#cd-persona", looks: "#cd-looks", personality: "#cd-personality", "catch": "#cd-catch", exp: "#cd-exp", examples: "#cd-examples" }, d), $("#cd-aifill")));
+$("#cd-aifill").addEventListener("click", () => fillFromFull($("#cd-full").value, d => applyFullTo({ name: "#cd-name", age: "#cd-age", gender: "#cd-gender", birth: "#cd-birth", identity: "#cd-identity", job: "#cd-job", phone: "#cd-phone", callme: "#cd-callme", relation: "#cd-relation", nickname: "#cd-nickname", netname: "#cd-netname", sign: "#cd-sign", persona: "#cd-persona", looks: "#cd-looks", personality: "#cd-personality", "catch": "#cd-catch", exp: "#cd-exp", examples: "#cd-examples" }, d), $("#cd-aifill")));
 $("#me-aifill").addEventListener("click", () => fillFromFull($("#me-full").value, d => applyFullTo({ name: "#me-name", age: "#me-age", gender: "#me-gender", birth: "#me-birth", identity: "#me-identity", job: "#me-job", phone: "#me-phone", nickname: "#me-nickname", netname: "#me-netname", sign: "#me-sign", persona: "#me-persona", looks: "#me-looks", personality: "#me-personality", "catch": "#me-catch", exp: "#me-exp" }, d), $("#me-aifill")));
 
 $("#cd-back").addEventListener("click", () => { if (window.__cdFromChat) { window.__cdFromChat = false; openApp("chat"); return; } renderArchive(); openApp("archive"); });
@@ -7527,7 +7546,7 @@ $("#bk-export").addEventListener("click", async () => {
   };
   const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = "小手机备份.json"; a.click();
+  a.href = URL.createObjectURL(blob); a.download = (function(){var d=new Date(),p=function(n){return String(n).padStart(2,'0')};return '蛋挞机备份—'+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+'.'+p(d.getMinutes())+'.json';})(); a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 3000);
   toast("备份文件下载好了，收好它");
 });
@@ -13155,7 +13174,7 @@ html body #scr-music.mf-old-mode[data-old-page="together"]:has(#tog-input:focus)
   var parts=['{"app":"小手机备份","full":2,"time":'+Date.now()+',"ls":',JSON.stringify(ls),',"idb":['];
   dbs.forEach(function(d,ix){parts.push((ix?',':'')+JSON.stringify(d))});parts.push(']}');
   var blob=new Blob(parts,{type:'application/json'});var a=document.createElement('a');var dt=new Date();
-  a.href=URL.createObjectURL(blob);a.download='小手机备份-'+dt.getFullYear()+String(dt.getMonth()+1).padStart(2,'0')+String(dt.getDate()).padStart(2,'0')+'.json';document.body.appendChild(a);a.click();a.remove();
+  a.href=URL.createObjectURL(blob);a.download=(function(){var d=new Date(),p=function(n){return String(n).padStart(2,'0')};return '蛋挞机备份—'+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+'.'+p(d.getMinutes())+'.json';})();document.body.appendChild(a);a.click();a.remove();
   setTimeout(function(){URL.revokeObjectURL(a.href)},5000);tst('备份文件下载好了，收好它');return blob}
  async function restoreDB(d){
   var db=await new Promise(function(res,rej){var r=indexedDB.open(d.name);r.onupgradeneeded=function(){};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}});
@@ -15470,6 +15489,258 @@ function emoGroupSheetOld(c) {
 
 window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, dantaOf, sbHideApply, syncPage2Icons, nextPg: next, curlTurn, paintLeaf, mkLeaf, snap, leafPos, tocSet, openAddBook, takeBook, openToc, pickReader, renderSmsList, renderShelf, openBook, openThread, renderNewFriends, openReq, R, SMS, FR, frSave, rSave, smsSave, dput, togOpen, openBookChat, patchContacts };
 })();
+
+/* ======== 美化台：聊天美化 / 壁纸 / 心声美化 三个独立界面，不再前后对比；心声可写 CSS ======== */
+(function xjBeautyTabs() {
+  const scr = document.getElementById("scr-beauty"); if (!scr) return;
+  const body = scr.querySelector(".appbody"), seg = document.getElementById("beauty-mode"), stage = document.getElementById("beauty-stage");
+  if (!body || !seg || !stage || document.getElementById("beauty-tabs")) return;
+  /* 一律实时预览，不要改之前/改之后 */
+  try { BEAUTY_MODE = "custom"; } catch (e) {}
+  seg.id = "beauty-tabs";
+  seg.innerHTML = '<button type="button" data-bt="chat" class="on">聊天美化</button><button type="button" data-bt="wall">壁纸</button><button type="button" data-bt="heart">心声美化</button>';
+  const hints = Array.from(body.querySelectorAll(":scope > p.hint"));
+  if (hints[0]) hints[0].textContent = "上面就是整页的效果：顶栏、头像、气泡、转账卡、音乐卡、输入框都在里面。下面写 CSS，上面马上跟着变；点「保存」才会一直用在聊天里。";
+  const cssTa = document.getElementById("beauty-css");
+  const cssFld = cssTa && cssTa.closest(".fld");
+  const bgFld = document.getElementById("beauty-bg-pick") && document.getElementById("beauty-bg-pick").closest(".fld");
+  const chatRow = document.getElementById("beauty-save") && document.getElementById("beauty-save").closest(".btnrow");
+  stage.dataset.bp = "chat wall";
+  hints.forEach(h => h.dataset.bp = "chat");
+  if (cssFld) cssFld.dataset.bp = "chat";
+  if (chatRow) chatRow.dataset.bp = "chat";
+  if (bgFld) {
+    bgFld.dataset.bp = "wall";
+    const lab = bgFld.querySelector("label"); if (lab) lab.textContent = "聊天背景壁纸";
+    const p = document.createElement("p"); p.className = "hint"; p.dataset.bp = "wall";
+    p.textContent = "选的图会铺满整个聊天背景，上面预览马上能看到效果。图片太亮的话，可以去「聊天美化」里给气泡加点不透明的底色。";
+    bgFld.parentNode.insertBefore(p, bgFld.nextSibling);
+  }
+
+  /* ---- 心声美化 ---- */
+  const HEART_KEY = "xj_heart_css";
+  let HEARTCSS = ""; try { HEARTCSS = localStorage.getItem(HEART_KEY) || ""; } catch (e) {}
+  /* 把用户写的选择器自动套到心声弹窗上，不用写 #id、不用加 !important 也能盖过默认样式 */
+  function scopeCss(css, root) {
+    return String(css || "").replace(/([^{}@;]+)\{([^{}]*)\}/g, (all, sel, decl) => {
+      const s = sel.trim();
+      if (!s || /^(from|to|\d+(\.\d+)?%)(\s*,\s*(from|to|\d+(\.\d+)?%))*$/i.test(s)) return all;
+      const out = s.split(",").map(x => {
+        x = x.trim(); if (!x) return x;
+        if (/^\.xj-heart-bg\b/.test(x)) return root + x.replace(/^\.xj-heart-bg/, "");
+        return root + " " + x;
+      }).join(", ");
+      return out + "{" + decl + "}";
+    });
+  }
+  function styleEl(id) { let el = document.getElementById(id); if (!el) { el = document.createElement("style"); el.id = id; document.body.appendChild(el); } return el; }
+  function applyHeart(css) { styleEl("xj-heart-custom-css").textContent = scopeCss(css, "#phone #xj-heart-overlay"); }
+  function paintHeartStage(css) { styleEl("xj-heart-stage-css").textContent = scopeCss(css, "#phone #heart-stage"); }
+  /* 预览用默认样式：照抄真弹窗的样式，换成预览框 */
+  (function copyBase() {
+    let txt = "";
+    document.querySelectorAll("style").forEach(s => { const t = s.textContent || ""; if (t.indexOf("#xj-heart-overlay .xj-heart") < 0) return; const re = /#xj-heart-overlay(\s+\.xj-heart[^{]*)\{([^}]*)\}/g; let m; while ((m = re.exec(t))) txt += "#heart-stage" + m[1] + "{" + m[2] + "}\n"; });
+    txt += "#heart-stage{position:relative;display:flex;align-items:center;justify-content:center;padding:26px 16px;border-radius:24px;margin:4px 0 12px;background:rgba(20,20,25,.31);overflow:hidden}" +
+      "#heart-stage .xj-heart-popup{max-height:none;width:100%}#heart-stage .xj-heart-close,#heart-stage .xj-heart-dismiss{pointer-events:none}";
+    styleEl("xj-heart-stage-base").textContent = txt;
+  })();
+  const SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 14.8c-1.2-1-1.8-2.2-1.8-3.8 0-4.4 3.7-7.2 8.5-7.2s8.5 2.8 8.5 7.2-3.7 7.2-8.5 7.2c-.8 0-1.5-.1-2.2-.2l-4.8 2.2.5-4.3"/></svg>';
+  const hp = document.createElement("div"); hp.dataset.bp = "heart";
+  hp.innerHTML =
+    '<div id="heart-stage"><div class="xj-heart-popup">' +
+      '<button class="xj-heart-close" type="button" tabindex="-1" aria-hidden="true">×</button>' +
+      '<div class="xj-heart-symbol">' + SVG + '</div>' +
+      '<div class="xj-heart-title">心声</div><div class="xj-heart-en">INNER THOUGHTS</div>' +
+      '<div class="xj-heart-card"><span class="xj-heart-quote">“</span><div class="xj-heart-text">只有和你在一块的时候，我觉得命运和纷争都离我太远，这个世界的复杂在你睫毛垂下的一瞬间消失，我的思绪回到呼吸，我退到远古，当我是一棵树。</div><div class="xj-heart-meta"><span class="xj-heart-who"><span id="heart-stage-name">对方</span> · 内心独白</span><span class="xj-heart-time">21:30</span></div></div>' +
+      '<div class="xj-heart-foot">仅你可见 · 与这条回复同步生成</div>' +
+      '<button class="xj-heart-dismiss" type="button" tabindex="-1" aria-hidden="true">收起心声</button>' +
+    '</div></div>' +
+    '<p class="hint">上面就是心声弹窗的样子（聊天里点他的头像就会弹出来）。下面写 CSS，上面马上跟着变；点「保存」才会一直用在真的心声里。</p>' +
+    '<p class="hint">能改的地方（写进下面 CSS 里，直接写，不用加 !important）：<br />' +
+      '.xj-heart-bg { } 弹窗后面那层灰色遮罩<br />.xj-heart-popup { } 整个白色弹窗（底色、圆角、边框、阴影）<br />' +
+      '.xj-heart-close { } 右上角的 ×<br />.xj-heart-symbol { } 顶上圆圆的小图标　.xj-heart-symbol svg { } 图标本身（用 color 改颜色）<br />' +
+      '.xj-heart-title { } 「心声」两个字　.xj-heart-en { } INNER THOUGHTS 那行<br />' +
+      '.xj-heart-card { } 中间那块灰色卡片　.xj-heart-quote { } 卡片左上角的引号<br />' +
+      '.xj-heart-text { } 心声正文（字色、字号、行距）<br />.xj-heart-meta { } 名字和时间那行　.xj-heart-who { } 名字　.xj-heart-time { } 时间<br />' +
+      '.xj-heart-foot { } 「仅你可见」那行小字<br />.xj-heart-dismiss { } 底下「收起心声」按钮<br />' +
+      '.xj-heart-popup::before { content: "♡"; } 可以给弹窗加小装饰</p>' +
+    '<div class="fld"><label>✎ 在这里写心声的 CSS（写完上面实时变）</label><textarea class="cssedit" id="heart-css" spellcheck="false"></textarea></div>' +
+    '<div class="btnrow"><button class="btn ghost" id="heart-clear" type="button">清空，恢复默认</button><button class="btn" id="heart-save" type="button">保存</button></div>';
+  body.insertBefore(hp, (chatRow && chatRow.nextSibling) || null);
+  const hta = document.getElementById("heart-css");
+  hta.value = HEARTCSS; applyHeart(HEARTCSS); paintHeartStage(HEARTCSS);
+  hta.addEventListener("input", () => paintHeartStage(hta.value));
+  document.getElementById("heart-save").onclick = () => { HEARTCSS = hta.value; try { localStorage.setItem(HEART_KEY, HEARTCSS); } catch (e) {} applyHeart(HEARTCSS); paintHeartStage(HEARTCSS); try { toast("心声美化保存好了"); } catch (e) {} };
+  document.getElementById("heart-clear").onclick = () => { HEARTCSS = ""; hta.value = ""; try { localStorage.setItem(HEART_KEY, ""); } catch (e) {} applyHeart(""); paintHeartStage(""); try { toast("清空了，心声恢复默认"); } catch (e) {} };
+
+  let TAB = "chat";
+  function showTab(t) {
+    TAB = t;
+    seg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.bt === t));
+    body.querySelectorAll("[data-bp]").forEach(el => { el.style.display = el.dataset.bp.split(" ").indexOf(t) >= 0 ? "" : "none"; });
+    if (t === "heart") { hta.value = hta.value || HEARTCSS; paintHeartStage(hta.value); }
+    try { body.scrollTop = 0; } catch (e) {}
+  }
+  seg.addEventListener("click", e => { const b = e.target.closest("button[data-bt]"); if (b) showTab(b.dataset.bt); });
+  try {
+    const old = openChatBeauty;
+    openChatBeauty = function () {
+      const r = old.apply(this, arguments);
+      try { BEAUTY_MODE = "custom"; paintBeautyStage(); } catch (e) {}
+      const n = document.getElementById("heart-stage-name"), bn = document.getElementById("beauty-name"); if (n && bn) n.textContent = bn.textContent;
+      hta.value = HEARTCSS; paintHeartStage(HEARTCSS);
+      showTab("chat"); return r;
+    };
+  } catch (e) {}
+  /* 返回时：没保存的心声 CSS 不留在真弹窗上 */
+  const bk = scr.querySelector(".navbar [data-back]"); if (bk) bk.addEventListener("click", () => { applyHeart(HEARTCSS); });
+  showTab("chat");
+  window.__xjHeartCss = { scopeCss, applyHeart };
+})();
+
+/* 线下美化也去掉前后对比，一直实时 */
+(function xjOffNoCompare() {
+  const seg = document.getElementById("offbeauty-mode"); if (!seg) return;
+  seg.style.display = "none";
+  try { OFFBEAUTY_MODE = "custom"; } catch (e) {}
+  const h = document.querySelector("#scr-offbeauty .appbody > p.hint"); if (h) h.textContent = "上面就是整页的效果：顶栏、场景、他说的话、我说的话、输入框都在里面。下面写 CSS，上面马上跟着变；点「保存」才会一直用在线下里。";
+  document.querySelectorAll("#scr-offbeauty .appbody > p.hint").forEach(p => { p.innerHTML = p.innerHTML.replace(/我的那句是黑底白字[^<]*/, "直接写就行，不用加 !important，写了就能用上。"); });
+  try { const old = openOffBeauty; openOffBeauty = function () { const r = old.apply(this, arguments); try { OFFBEAUTY_MODE = "custom"; paintOffBeautyStage(); } catch (e) {} return r; }; } catch (e) {}
+})();
+
+/* ======== 音乐 App：装扮做成单独界面；自定义 CSS 放到最后，保证写了能用上 ======== */
+(function xjMusicDress() {
+  const CSS =
+    "#xjDress{position:absolute;inset:0;z-index:2147480000;background:var(--bg);color:var(--fg);display:flex;flex-direction:column}" +
+    "#xjDress[hidden]{display:none!important}" +
+    "#xjDress .xjd-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 50px) 14px 8px;}" +
+    "#xjDress .xjd-head b{font-size:17px;font-weight:650;letter-spacing:1px}" +
+    "#xjDress .xjd-back{width:38px;height:38px;border-radius:50%;font-size:28px;line-height:1;color:var(--fg);background:none;border:0}" +
+    "#xjDress .xjd-body{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 30px;-webkit-overflow-scrolling:touch}" +
+    "#xjDress .xjd-seg{display:flex;background:var(--panel);border-radius:14px;padding:4px;margin:2px 0 14px}" +
+    "#xjDress .xjd-seg button{flex:1;height:36px;border:0;border-radius:11px;background:none;color:var(--muted);font-size:14px;font-weight:600}" +
+    "#xjDress .xjd-seg button.on{background:var(--panel2);color:var(--fg)}" +
+    "#xjDress .xjd-stage{border-radius:22px;overflow:hidden;background:linear-gradient(180deg,var(--hero),var(--hero2));padding:18px 0 14px;margin-bottom:12px;border:1px solid var(--line);pointer-events:none}" +
+    "#xjDress .xjd-stage .profile{padding-top:4px}" +
+    "#xjDress .xjd-vipstage{height:150px;display:flex;align-items:center;justify-content:center;padding:0}" +
+    "#xjDress .xjd-vipbox{transform:translateX(-14px) scale(2.6);transform-origin:center}" +
+    "#xjDress .xjd-seg button{font-size:13px!important}" +
+    "#xjDress .xjd-hint{font-size:12.5px;line-height:1.75;color:var(--muted);margin:0 2px 12px}" +
+    "#xjDress .xjd-lab{font-size:13px;font-weight:650;margin:16px 2px 8px}" +
+    "#xjDress .presets{display:flex;gap:8px;margin-bottom:10px}" +
+    "#xjDress .presets button{height:36px;padding:0 15px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:13.5px}" +
+    "#xjDress textarea{display:block;box-sizing:border-box;width:100%;min-height:200px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:13px 14px;font:13.5px/1.6 ui-monospace,Menlo,monospace;outline:none;resize:vertical}" +
+    "#xjDress .xjd-row{display:flex;gap:10px;margin-top:14px}" +
+    "#xjDress .xjd-row button{flex:1;height:46px;border-radius:15px;border:0;font-size:15px;font-weight:650;background:var(--panel);color:var(--fg)}" +
+    "#xjDress .xjd-row button.pri{background:var(--accent);color:#fff}" +
+    "#xjDress #mfWallpaperPreview{width:100%;height:auto;aspect-ratio:3/4;max-height:340px;border-radius:20px;background:var(--panel) center/cover no-repeat;border:1px solid var(--line);margin-bottom:12px;display:grid;place-items:center;color:var(--muted);font-size:13px}";
+  const HINT =
+    "上面是音乐首页顶上那块的样子。下面写 CSS，上面马上跟着变；点「保存」才会一直用。<br />能改的地方（写进下面 CSS 里，直接写，不用加 !important）：<br />" +
+    ".phone { --accent: #e9a6c7; } 主题色（按钮、进度条那种红色）<br />.phone { --bg: #1b1b1d; } 整个底色　.phone { --fg: #fff; } 主要文字颜色　.phone { --muted: #999; } 灰色小字<br />" +
+    ".profile-pic { } 头像框　.avatar-img { } 头像图片<br />.nickname button { } 昵称<br />" +
+    ".svip-badge { } SVIP 标整体（大小、位置、滤镜、阴影）<br />.svip-badge rect { fill: #f7c6d9 !important; } 标的底牌颜色<br />.svip-badge text { fill: #fff !important; } SVIP 和「柒」的字色<br />.svip-badge circle { } 左边那张小唱片<br />" +
+    ".account-entry { } 网易云登录那行<br />.stats b { } 关注、粉丝那些数字　.stats span { } 数字后面的小字<br />.quick button { } 最近、本地、收藏、装扮四个按钮<br />.feature-tabs button { } 音乐、播客、评论那排";
+  const PRE = {
+    dark: "", light: "", pink: ""
+  };
+  function inject(doc, win) {
+    if (!doc || !doc.getElementById("dressBtn") || doc.getElementById("xjDress")) return;
+    const st = doc.createElement("style"); st.id = "xj-dress-css"; st.textContent = CSS; doc.head.appendChild(st);
+    /* 自定义 CSS 原来放在最前面，会被后面的样式盖住。挪到最后 */
+    const cs = doc.getElementById("customStyle");
+    const toEnd = () => { if (cs && cs.parentNode && doc.body.lastElementChild !== cs) doc.body.appendChild(cs); };
+    toEnd();
+    try { new win.MutationObserver(() => { if (cs && cs.nextElementSibling && /^(STYLE|LINK)$/.test(cs.nextElementSibling.tagName)) toEnd(); }).observe(doc.body, { childList: true }); } catch (e) {}
+    const phone = doc.getElementById("phone") || doc.body;
+    const pg = doc.createElement("div"); pg.id = "xjDress"; pg.hidden = true;
+    pg.innerHTML =
+      '<div class="xjd-head"><button class="xjd-back" type="button" aria-label="返回">‹</button><b>装扮</b><span style="width:38px"></span></div>' +
+      '<div class="xjd-body"><div class="xjd-seg"><button type="button" data-t="css" class="on">CSS 美化</button><button type="button" data-t="vip">SVIP 标</button><button type="button" data-t="wall">播放页壁纸</button></div>' +
+      '<div data-p="css"><div class="xjd-stage" id="xjdStage"></div><p class="xjd-hint">' + HINT + '</p>' +
+      '<div class="xjd-lab">预设主题</div><div class="presets"><button type="button" data-xp="dark">深色</button><button type="button" data-xp="light">浅色</button><button type="button" data-xp="pink">柔粉</button></div>' +
+      '<div class="xjd-lab">✎ 在这里写 CSS（写完上面实时变）</div><textarea id="xjdCss" spellcheck="false"></textarea>' +
+      '<div class="xjd-row"><button type="button" id="xjdClear">清空，恢复默认</button><button type="button" class="pri" id="xjdSave">保存</button></div></div>' +
+      '<div data-p="vip" hidden><div class="xjd-stage xjd-vipstage"><div class="xjd-vipbox" id="xjdVipStage"></div></div><p class="xjd-hint">上面是放大的 SVIP 标，下面写 CSS 马上跟着变；点「保存」才会用在音乐首页上。直接写就行，不用加 !important。<br>能改的地方：<br>.svip-badge { } 整个标（大小、底色、圆角、阴影、边框）<br>.svip-badge svg { } 原来的图标，写 display:none 可以整个藏掉自己重画<br>.svip-badge rect { fill: } 图标底色　.svip-badge text { fill: } SVIP 和「柒」的字色<br>.svip-badge circle { fill: } 左边那颗小唱片<br>.svip-badge::before { content: "" } .svip-badge::after { content: "" } 自己加字、加小图标、画新形状<br>还能用 border-radius、clip-path（剪形状）、transform（旋转缩放）、background 渐变或图片、@keyframes 动画。</p>' +
+      '<div class="xjd-lab">✎ 在这里写 SVIP 标的 CSS（写完上面实时变）</div><textarea id="xjdVip" spellcheck="false"></textarea>' +
+      '<div class="xjd-row"><button type="button" id="xjdVipClear">清空，恢复默认</button><button type="button" class="pri" id="xjdVipSave">保存</button></div></div>' +
+      '<div data-p="wall" hidden><p class="xjd-hint">换的是歌词／黑胶播放页的背景，音乐首页不受影响。</p><div id="mfWallpaperPreview"></div>' +
+      '<div class="xjd-row"><button type="button" id="mfWallpaperPick" data-bound="1">上传壁纸</button><button type="button" id="mfWallpaperClear">清除</button></div><input id="mfWallpaperFile" type="file" accept="image/*" hidden /></div>' +
+      '</div>';
+    phone.appendChild(pg);
+    const $d = id => doc.getElementById(id);
+    const KEY = "musicPreviewCss2", WALL = "xj_music_wallpaper_shared_v13";
+    let saved = ""; try { saved = win.localStorage.getItem(KEY) || cs.textContent || ""; } catch (e) { saved = cs ? cs.textContent : ""; }
+    const ta = $d("xjdCss");
+    /* 用户写的 CSS 自动提高优先级并加 !important，保证能盖过音乐页自带的样式 */
+    const boost = css => String(css || "").replace(/([^{}@;]+)\{([^{}]*)\}/g, (all, sel, decl) => {
+      const s = sel.trim(); if (!s || /^(from|to|\d+(\.\d+)?%)/i.test(s)) return all;
+      const ss = s.split(",").map(x => { x = x.trim(); if (!x) return x; if (/^(html|body|:root)\b/.test(x)) return x; if (/^\.phone\b/.test(x)) return "html body #phone" + x; if (/^#phone\b/.test(x)) return "html body " + x; return "html body #phone " + x; }).join(", ");
+      const dd = decl.split(";").map(x => (!x.trim() || /!important\s*$/i.test(x) || x.indexOf(":") < 0 || /^\s*--/.test(x)) ? x : x.replace(/\s*$/, " !important")).join(";");
+      return ss + "{" + dd + "}";
+    });
+    const setCss = v => { if (cs) cs.textContent = boost(v); };
+    /* SVIP 标单独一份 CSS，放在自定义 CSS 后面 */
+    const VKEY = "xj_music_svip_css";
+    let vsaved = ""; try { vsaved = win.localStorage.getItem(VKEY) || ""; } catch (e) {}
+    const vs = doc.createElement("style"); vs.id = "xjSvipStyle"; doc.body.appendChild(vs);
+    const setVip = v => { vs.textContent = boost(v); if (cs && vs.previousElementSibling !== cs) doc.body.appendChild(vs); if (doc.body.lastElementChild !== vs) doc.body.appendChild(vs); };
+    setVip(vsaved);
+    ta.addEventListener("input", () => setCss(ta.value));
+    $d("xjdSave").onclick = () => { saved = ta.value; setCss(saved); try { win.localStorage.setItem(KEY, saved); } catch (e) {} try { win.toast && win.toast("装扮保存好了"); } catch (e) {} };
+    $d("xjdClear").onclick = () => { ta.value = ""; saved = ""; setCss(""); try { win.localStorage.setItem(KEY, ""); } catch (e) {} try { win.toast && win.toast("清空了，恢复默认"); } catch (e) {} };
+    pg.querySelectorAll("[data-xp]").forEach(b => b.onclick = () => { try { win.setPreset(b.dataset.xp); } catch (e) {} pg.querySelectorAll("[data-xp]").forEach(x => x.style.outline = x === b ? "1.5px solid var(--accent)" : ""); });
+    pg.querySelector(".xjd-seg").onclick = e => { const b = e.target.closest("button[data-t]"); if (!b) return; pg.querySelectorAll(".xjd-seg button").forEach(x => x.classList.toggle("on", x === b)); pg.querySelectorAll("[data-p]").forEach(p => p.hidden = p.dataset.p !== b.dataset.t); };
+    /* 播放页壁纸 */
+    const wallApply = () => { let d = ""; try { d = win.localStorage.getItem(WALL) || ""; } catch (e) {} const pane = $d("pane-lyrics"); if (pane) { pane.style.setProperty("--mf-player-wallpaper", d ? "url(" + JSON.stringify(d) + ")" : "none"); pane.classList.toggle("mf-wallpaper-on", !!d); } const pv = $d("mfWallpaperPreview"); if (pv) { pv.style.backgroundImage = d ? "url(" + JSON.stringify(d) + ")" : "none"; pv.textContent = d ? "" : "还没有壁纸"; } };
+    const inp = $d("mfWallpaperFile");
+    $d("mfWallpaperPick").onclick = () => inp.click();
+    $d("mfWallpaperClear").onclick = () => { try { win.localStorage.removeItem(WALL); } catch (e) {} wallApply(); };
+    inp.onchange = () => { const f = inp.files && inp.files[0]; inp.value = ""; if (!f || !/^image\//.test(f.type)) return; const fr = new win.FileReader(); fr.onload = () => { const im = new win.Image(); im.onload = () => { const c = doc.createElement("canvas"); const k = Math.min(1, 960 / Math.max(im.width, im.height)); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); try { win.localStorage.setItem(WALL, c.toDataURL("image/jpeg", .77)); wallApply(); } catch (e) { win.alert("壁纸太大了，请换一张小一点的图片"); } }; im.src = fr.result; }; fr.readAsDataURL(f); };
+    function fillStage() {
+      const box = $d("xjdStage"); box.innerHTML = "";
+      [doc.querySelector("#pane-home .profile"), doc.querySelector("#pane-home .quick")].forEach(n => { if (!n) return; const c = n.cloneNode(true); box.appendChild(c); });
+    }
+    const vta = $d("xjdVip");
+    vta.addEventListener("input", () => setVip(vta.value));
+    $d("xjdVipSave").onclick = () => { vsaved = vta.value; setVip(vsaved); try { win.localStorage.setItem(VKEY, vsaved); } catch (e) {} try { win.toast && win.toast("SVIP 标保存好了"); } catch (e) {} };
+    $d("xjdVipClear").onclick = () => { vta.value = ""; vsaved = ""; setVip(""); try { win.localStorage.setItem(VKEY, ""); } catch (e) {} try { win.toast && win.toast("清空了，恢复默认"); } catch (e) {} };
+    function fillVip() { const box = $d("xjdVipStage"); box.innerHTML = ""; const b = doc.querySelector("#pane-home .svip-badge"); if (b) box.appendChild(b.cloneNode(true)); }
+    function open() { fillVip(); vta.value = vsaved; try { win.closeModal && win.closeModal(); } catch (e) {} fillStage(); ta.value = saved; wallApply(); pg.querySelector('.xjd-seg [data-t="css"]').click(); pg.hidden = false; pg.querySelector(".xjd-body").scrollTop = 0; }
+    pg.querySelector(".xjd-back").onclick = () => { setCss(saved); setVip(vsaved); pg.hidden = true; };
+    setCss(saved);
+    win.openDress = open;
+    $d("dressBtn").onclick = open;
+    const to = $d("topOptions"); if (to) to.onclick = open;
+    wallApply();
+    window.__xjMusicDress = { open, doc };
+  }
+  function hook() {
+    const f = document.getElementById("mf-ui-frame"); if (!f) return false;
+    const go = () => { try { inject(f.contentDocument, f.contentWindow); } catch (e) { console.warn("[xj music dress]", e); } };
+    f.addEventListener("load", () => setTimeout(go, 50)); go();
+    return true;
+  }
+  if (!hook()) { let n = 0; const t = setInterval(() => { if (hook() || ++n > 60) clearInterval(t); }, 500); }
+})();
+
+/* 线下美化：自动给每条样式加 !important，写了就能盖过主题 */
+(function xjOffImportant() {
+  function imp(css) {
+    return String(css || "").replace(/\{([^{}]*)\}/g, (a, d) => "{" + d.split(";").map(x => { if (!x.trim() || /!important\s*$/i.test(x) || x.indexOf(":") < 0) return x; return x.replace(/\s*$/, " !important"); }).join(";") + "}");
+  }
+  try { const oa = applyOffCss; applyOffCss = function (css) { return oa.call(this, imp(css)); }; } catch (e) {}
+  try { const os = offStageCss; offStageCss = function (css) { return imp(os.call(this, css)); }; } catch (e) {}
+  try { applyOffCss(OFFCSS); } catch (e) {}
+  window.__xjCssImp = imp;
+})();
+
+/* 美化台三个切换标签：左右留点空 */
+(function(){ const s=document.createElement("style"); s.textContent="#scr-beauty #beauty-tabs{margin-left:14px!important;margin-right:14px!important;width:auto!important}"; document.head.appendChild(s); })();
+
+/* 聊天美化预览里的两句文案 */
+(function(){ const m=document.getElementById("beauty-msgs"); if(!m) return; const bs=m.querySelectorAll(".msg > .bub");
+  if(bs[0]) bs[0].textContent="我知这世界如露水般短暂，然而，然而。";
+  if(bs[1]) bs[1].textContent="如果眼泪是唯一留住你的手段，那我们的未来是一片没有尽头的海。"; })();
 
 </script>
 </body>
