@@ -2262,7 +2262,7 @@ html,body{background:#fff!important;background-image:none!important;}
 #scr-forumpost .fx-replybar{border-top:1px solid var(--fx-line);padding:8px 14px}
 #scr-forumpost .fx-replybar input{height:40px;border-radius:20px;border:0;background:var(--fx-soft)}
 #scr-forumpost #fxp-send{display:none}
-#scr-forumpost.fx-typing #fxp-send{display:block}
+#scr-forumpost.fx-ptyping #fxp-send{display:block}
 /* 主页：封面通顶，悬浮圆按钮 */
 
 #scr-forumuser .statusbar{position:absolute!important;top:0;left:0;right:0;background:transparent!important;color:#fff!important;z-index:9;transition:background .2s,color .2s}
@@ -2426,6 +2426,21 @@ html,body{background:#fff!important;background-image:none!important;}
 #scr-forumnoti .fx-logo{padding-left:0}
 #scr-forum .fx-top .fx-logo{padding-left:72px}
 .fx-cnum[hidden]{display:none!important}.fx-cnum input::-webkit-inner-spin-button,.fx-cnum input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.fx-cnum input{-moz-appearance:textfield;appearance:textfield}
+.fx-loading{border-bottom:0!important}
+#fxf-cs{margin-bottom:14px}
+.fx-dmai.stop{background:#0f1419!important;color:#fff!important;border-color:#0f1419!important}.phone[data-theme="dark"] .fx-dmai.stop{background:#e7e9ea!important;color:#000!important}.fx-dmai.stop svg{width:18px;height:18px}
+.fx-banbar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 74px);z-index:60;background:#f4212e;color:#fff;font-size:13px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(244,33,46,.28);white-space:nowrap;pointer-events:none}
+.fx-ntsys .fx-to{font-weight:600}
+.fx-ntsys.bad .fx-to{color:#f4212e}
+.fx-ntsys.okk .fx-to{color:#00ba7c}
+.fx-apibox{border:1px solid var(--fx-line);border-radius:14px;padding:10px 12px 4px;margin:8px 0}
+.fx-apibox .fx-in{margin:0 0 8px}
+.fx-apih{font-size:14px;font-weight:700;margin:2px 0 8px;display:flex;align-items:center;gap:8px}
+.fx-apist{font-size:12px;font-weight:500;color:var(--fx-sub);background:var(--fx-hover,rgba(0,0,0,.05));padding:2px 8px;border-radius:999px}
+.fx-apist.on{color:#fff;background:#1d9bf0}
+.fx-bigbtn.sm{font-size:13px;padding:9px 12px;margin-top:4px}
+.fx-mrs,.fx-mrs .fx-rlrow,.fx-mrs .fx-rltx{text-align:center!important}p.hint.fx-mrs{margin:10px 8px 14px!important;padding:0!important}
+.fx-bub.fx-bubrm{background:transparent!important;color:var(--fx-sub)!important;border:1px dashed var(--fx-line)!important;font-size:13px}
 .fx-loading{border-bottom:0!important}
 #fxf-cs{margin-bottom:14px}
 .fx-dmai.stop{background:#0f1419!important;color:#fff!important;border-color:#0f1419!important}.phone[data-theme="dark"] .fx-dmai.stop{background:#e7e9ea!important;color:#000!important}.fx-dmai.stop svg{width:18px;height:18px}
@@ -16249,6 +16264,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
   const followsMe = au => au.k !== "me" && followingOf(au).indexOf("me") >= 0;
   function npcFollowMe(n, on) { soc(n); const i = n.fing.indexOf("me"); if (on && i < 0) { n.fing.push("me"); return true; } if (!on && i >= 0) n.fing.splice(i, 1); return false; }
   function toggleFollow(au) {
+    if (meLocked()) return; if (blockedMe(au)) { toast("对方已将你拉黑，无法关注"); return; }
     const d = FX(); const k = fkey(au); const i = d.follow.indexOf(k);
     if (i >= 0) d.follow.splice(i, 1); else {
       d.follow.push(k);
@@ -16258,6 +16274,60 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
   }
   function cntFollowing(au) { const n = au.k === "n" ? soc(npcById(au.id)) : null; return followingOf(au).filter(k => exists(keyAu(k))).length + (n ? n.fg0 : 0); }
   function cntFollowers(au) { const n = au.k === "n" ? soc(npcById(au.id)) : null; return followersOf(au).length + (n ? n.fb0 : 0); }
+  /* ---------- 我被举报 / 被拉黑 ---------- */
+  function meBan() { const b = FX().meBanS; return b && b.until > now() ? b : null; }
+  function meLocked() { const b = meBan(); if (!b) return false; toast("你的账号被封禁中，还剩 " + Math.ceil((b.until - now()) / 1000) + " 秒"); return true; }
+  function blockedMe(au) { if (!au || au.k !== "n") return false; const n = npcById(au.id); return !!(n && n.blockMe); }
+  const RREASON = ["人身攻击 / 辱骂", "骚扰", "引战 / 恶意带节奏", "造谣 / 不实信息", "其他"];
+  function reportMe(n, kind, text, reason) {
+    if (!n) return null; const d = FX(); d.meRep = d.meRep || [];
+    if (d.meRep.some(x => x.npcId === n.id && x.st === "wait")) return null;
+    const why = RREASON.indexOf(reason) >= 0 ? reason : RREASON[rnd(0, RREASON.length - 1)];
+    const x = { id: uid("mr"), npcId: n.id, name: n.name, kind, reason: why, text: String(text || "").slice(0, 80), t: now(), due: now() + rnd(8000, 25000), st: "wait" };
+    d.meRep.push(x); save(); return x;
+  }
+  function blockMe(n, why) {
+    if (!n || n.blockMe) return; n.blockMe = true; n.blockAt = now(); npcFollowMe(n, false);
+    const d = FX(); const k = "n:" + n.id; const i = d.follow.indexOf(k); if (i >= 0) d.follow.splice(i, 1);
+    const dm = getDm({ k: "n", id: n.id }, true); if (!dm.blocked) { dm.blocked = true; dm.msgs.push({ sys: true, text: "你已被对方拉黑", t: now() }); }
+    d.meBlk = d.meBlk || []; d.meBlk.push({ id: uid("mb"), npcId: n.id, name: n.name, why: String(why || "").slice(0, 60), t: now() });
+    save(); toast(n.name + " 把你拉黑了");
+  }
+  function repResultSheet(x) {
+    const ok = x.st === "ok";
+    openSheet('<h3>' + (ok ? "你被举报了 · 举报成功" : "你被举报了 · 举报未成功") + '</h3>' +
+      '<div class="fx-rlog fx-mrs"><div class="fx-rlrow"><div><b>' + E(x.name) + "</b><span> 举报了你的" + (KIND[x.kind] || "内容") + " · " + E(x.reason) + '</span></div>' + (x.text ? '<div class="fx-rltx">「' + E(x.text) + "」</div>" : "") + "</div></div>" +
+      '<p class="hint fx-mrs">' + (ok ? "经论坛审核，你的" + (KIND[x.kind] || "内容") + "违反社区规定，已被删除。你的账号被封禁 1 分钟，" + fullTime(x.until) + " 解封，封禁期间不能发帖、回帖、私信、点赞和关注。" : "经论坛审核，你的" + (KIND[x.kind] || "内容") + "没有违反社区规定，不予处理。") + "</p>" +
+      '<button class="btn" id="fxmr-ok">知道了</button>');
+    $("#fxmr-ok").addEventListener("click", closeSheet);
+  }
+  function settleMeReports() {
+    const d = FX(); if (!d.meRep) return; let ch = false;
+    d.meRep.forEach(x => {
+      if (x.st !== "wait" || x.due > now()) return;
+      const ok = Math.random() < 0.5; x.st = ok ? "ok" : "fail"; x.done = now(); ch = true;
+      if (ok) {
+        x.until = now() + 60000; d.meBanS = { until: x.until, at: now(), by: x.name, why: x.reason };
+        if (x.kind === "dm") { const dm = getDm({ k: "n", id: x.npcId }); const m = dm && dm.msgs.slice().reverse().find(q => q.me && !q.removed && String(q.text).slice(0, 80) === x.text); if (m) m.removed = true; if (dm) dm.msgs.push({ sys: true, text: "你被 " + x.name + " 举报，举报成功，账号封禁 1 分钟", t: now() }); try { if (CURD === (dm && dm.id)) renderDm(false); } catch (e) {} }
+        if (x.pid) { const p = d.posts.find(q => q.id === x.pid); if (p) { if (x.rid) { const r = (p.rep || []).find(q => q.id === x.rid); if (r) r.removed = true; } else if (p.au.k === "me") p.removed = true; } }
+      }
+      x.pend = true;
+    });
+    if (!document.hidden) d.meRep.forEach(x => { if (x.pend) { x.pend = false; ch = true; repResultSheet(x); } });
+    if (ch) { save(); renderAll(); }
+  }
+  function paintBanBar() {
+    const b = meBan();
+    ["#scr-forum", "#scr-forumpost", "#scr-forumdm", "#scr-forumuser"].forEach(sel => {
+      const sc = $(sel); if (!sc) return; let el = sc.querySelector(".fx-banbar");
+      if (!b) { if (el) el.remove(); return; }
+      if (!el) { el = document.createElement("div"); el.className = "fx-banbar"; sc.appendChild(el); }
+      const s = Math.max(0, Math.ceil((b.until - now()) / 1000));
+      el.textContent = "账号封禁中 · " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + " 后解封";
+    });
+  }
+  let BANWAS = false;
+  setInterval(() => { try { settleMeReports(); paintBanBar(); const on = !!meBan(); if (BANWAS && !on) toast("账号已解封"); BANWAS = on; } catch (e) {} }, 1000);
   function banOf(n) { if (!n || !n.ban) return null; if (n.ban.until > now()) return n.ban; return null; }
   function tagOf(au) {
     if (au.k === "n") { const b = banOf(npcById(au.id)); if (b) return '<span class="fx-tag">' + (b.type === "ban" ? "封禁中" : "禁言中") + "</span>"; }
@@ -16314,7 +16384,43 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       "【论坛名】" + (d.set.name || "论坛") + "\n【user（主视角，也是论坛用户）】" + meText() + "\n";
   }
   const JSON_RULE = "\n只输出一个 JSON 对象，不要解释，不要代码块。所有 author/to 字段写论坛昵称。新出现的 NPC 必须写进 newNpcs（name 昵称、age 年龄、gender 性别、persona 一两句话的性格、sign 个签：像真人在社交平台写的个人简介，一句话、梗、情绪、或很敷衍的一个词都行，绝对不要写性格描述）。";
-  async function llm(sys, user, max) {
+  /* 切后台再回来：请求被系统掐断的话，回到前台自动重新请求，直到成功或手动停止 */
+  let HID_AT = document.hidden ? Date.now() : 0;
+  document.addEventListener("visibilitychange", () => { if (document.hidden) HID_AT = Date.now(); });
+  const waitVisible = () => document.hidden ? new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener("visibilitychange", f); r(); } }; document.addEventListener("visibilitychange", f); }) : Promise.resolve();
+  async function llm(sys, user, max, stopFn) {
+    for (let k = 0; k < 4; k++) {
+      const t0 = Date.now(); let res = null;
+      try { res = await llm1(sys, user, max); } catch (e) { res = null; }
+      if (res || (stopFn && stopFn())) return res;
+      const wasBg = document.hidden || HID_AT >= t0;
+      if (!wasBg && k >= 1) return res;
+      await waitVisible(); if (stopFn && stopFn()) return null;
+      if (wasBg) toast("回到前台，继续生成…");
+      await new Promise(r => setTimeout(r, 600));
+    }
+    return null;
+  }
+  /* 论坛专用 API：填了就用论坛自己的，没填就用小手机设置里的 */
+  function fxApi(k) { try { const a = (FX().set.api || {})[k] || {}; return a.url && a.key ? a : null; } catch (e) { return null; } }
+  async function fxGenImage(cfg, prompt) {
+    const r = await fetch(imgApiUrl(cfg.url), { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key }, body: JSON.stringify({ model: cfg.model || "dall-e-3", prompt, n: 1, size: "1024x1024" }) });
+    if (!r.ok) throw new Error("论坛生图接口返回 " + r.status + (r.status === 401 ? "（密钥不对）" : r.status === 404 ? "（地址或模型名不对）" : ""));
+    const j = await r.json(); const d = j && j.data && j.data[0]; if (!d) throw new Error("论坛生图接口没返回图片");
+    if (d.b64_json) { const blob = b64ToBlob(d.b64_json, "image/png"); return { blob, url: URL.createObjectURL(blob) }; }
+    if (d.url) { try { const fr = await fetch(d.url); if (fr.ok) { const b = await fr.blob(); return { blob: b, url: URL.createObjectURL(b) }; } } catch (e) {} return { url: d.url, remote: true }; }
+    throw new Error("论坛生图接口返回里没有图片");
+  }
+  async function llm1(sys, user, max) {
+    const fc = fxApi("chat");
+    if (fc) {
+      try {
+        const r = await fetch(normApiUrl(fc.url), { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + fc.key },
+          body: JSON.stringify({ model: fc.model || "gpt-4o-mini", temperature: 0.95, max_tokens: Math.max(1200, max || 800), messages: [{ role: "system", content: sys }, { role: "user", content: user }] }) });
+        if (!r.ok) { window.__fxErr = "论坛聊天 API 返回 " + r.status + (r.status === 401 ? "（密钥不对）" : r.status === 404 ? "（地址或模型名不对）" : ""); return null; }
+        const j = await r.json(); return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+      } catch (e) { window.__fxErr = "论坛聊天 API 连不上"; return null; }
+    }
     if (window.rain && typeof window.rain.ai === "function") return await window.rain.ai(user, { system: sys, max: max || 800 });
     if (!(apis.chat && apis.chat.url && apis.chat.key)) return null;
     try {
@@ -16329,8 +16435,8 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     const a = s.indexOf("{"), b = s.lastIndexOf("}"); if (a < 0 || b <= a) return null;
     try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { try { return JSON.parse(s.slice(a, b + 1).replace(/,\s*([}\]])/g, "$1")); } catch (e2) { return null; } }
   }
-  const failMsg = () => (window.__xjReason ? window.__xjReason() : "生成失败，检查一下聊天 API");
-  function needApi() { if (typeof chatApiReady === "function" && chatApiReady()) return true; toast("先去设置里接好聊天 API"); return false; }
+  const failMsg = () => (fxApi("chat") && window.__fxErr) ? window.__fxErr : (window.__xjReason ? window.__xjReason() : "生成失败，检查一下聊天 API");
+  function needApi() { if (fxApi("chat")) return true; if (typeof chatApiReady === "function" && chatApiReady()) return true; toast("先去设置里接好聊天 API"); return false; }
 
   /* ---------- 生成：刷新动态 ---------- */
   let busy = false;
@@ -16388,7 +16494,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       ask = "生成 " + (opt.n || 4) + " 条新回复。" + W[opt.who] + "。" + (opt.under ? "这些回复都是在回复 " + nameOf(opt.under.au) + " 的评论「" + opt.under.text + "」（to 填 " + nameOf(opt.under.au) + "），回复之间也可以互相回。" : "可以回帖主，也可以回评论区里的人，互相回复、吵起来都行。") + (opt.hint ? "\n【user 希望这批回复的方向】" + opt.hint : "") + "不要替 user 说话。";
     }
     const sys2 = sys + "\n【当前帖子】\n" + threadText(post);
-    const fmt = "\n格式：{\"newNpcs\":[],\"replies\":[{\"author\":\"\",\"to\":\"回复谁（昵称），回帖主就留空\",\"text\":\"\"}],\"imp\":[{\"name\":\"\",\"imp\":\"\"}]}" + JSON_RULE;
+    const fmt = "\n格式：{\"newNpcs\":[],\"replies\":[{\"author\":\"\",\"to\":\"回复谁（昵称），回帖主就留空\",\"text\":\"\"}],\"imp\":[{\"name\":\"\",\"imp\":\"\"}]" + (mine ? ",\"reportMe\":[{\"name\":\"举报 user 的 NPC 昵称\",\"why\":\"人身攻击 / 辱骂、骚扰、引战 / 恶意带节奏、造谣 / 不实信息、其他 选一个\"}],\"blockMe\":[\"把 user 拉黑的 NPC 昵称\"]" : "") + "}" + (mine ? "\nreportMe 和 blockMe 通常是空数组；只有 NPC 真的被 user 冒犯、或者性格就小心眼爱举报/拉黑时才写。" : "") + JSON_RULE;
     const j = pj(await llm(sys2, ask + fmt, 1500));
     if (!j) { toast(failMsg()); return; }
     addNewNpcs(j.newNpcs);
@@ -16401,6 +16507,17 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       const nr = pushReply(post, r, j.newNpcs, t, fa); if (nr) { n++; t += 1; if (und && und.id && und.id !== post.id && nr.to && same(nr.to, und.au)) nr.par = und.id; }
     });
     if (!summon && mine) { const ids = Array.from(new Set((post.rep || []).slice(-n).filter(r => r.au.k === "n").map(r => r.au.id))); ids.forEach(id => { const x = npcById(id); if (x && !banOf(x) && Math.random() < 0.15 && npcFollowMe(x, true)) toast(x.name + " 关注了你"); }); }
+    if (mine) {
+      const myR = mine.kind === "post" ? null : (post.rep || []).slice().reverse().find(x => x.au.k === "me" && x.text === mine.text);
+      const toMe = Array.from(new Set((post.rep || []).slice(-n).filter(r => r.au.k === "n" && (r.to ? r.to.k === "me" : post.au.k === "me")).map(r => r.au.id))).map(npcById).filter(Boolean);
+      const auN = nm => { const a = nm ? findAu(nm) : null; return a && a.k === "n" ? npcById(a.id) : null; };
+      const rp = (j.reportMe || []).map(x => ({ n: auN(x && x.name), why: x && x.why })).filter(x => x.n);
+      if (!rp.length && toMe.length && Math.random() < 0.05) rp.push({ n: toMe[rnd(0, toMe.length - 1)], why: "" });
+      rp.slice(0, 1).forEach(x => { const m = reportMe(x.n, mine.kind === "post" ? "post" : "rep", mine.text || post.text, x.why); if (m) { m.pid = post.id; m.rid = myR ? myR.id : null; save(); } });
+      const bl = (j.blockMe || []).map(auN).filter(Boolean);
+      if (!bl.length && toMe.length && Math.random() < 0.03) bl.push(toMe[rnd(0, toMe.length - 1)]);
+      bl.slice(0, 2).forEach(x => blockMe(x, mine.text));
+    }
     applyImp(j.imp); save(); renderAll(); if (!n) toast("暂时没人理你");
   }
 
@@ -16529,12 +16646,13 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     else { el.hidden = true; const f = FST.length && p ? (p.rep || []).find(x => x.id === FST[FST.length - 1]) : null; $("#fxp-in").placeholder = f ? "回复 " + nameOf(f.au) : "发布你的回复"; }
   }
   async function sendReply() {
-    const i = $("#fxp-in"); const text = i.value.trim(); if (!text) return;
+    const i = $("#fxp-in"); const text = i.value.trim(); if (!text) return; if (meLocked()) return;
     const p = FX().posts.find(x => x.id === CUR); if (!p) return;
     const rid = RTO || FST[FST.length - 1] || null;
     const r0 = rid ? (p.rep || []).find(x => x.id === rid) : null;
+    if (blockedMe(r0 ? r0.au : p.au)) { toast("对方已将你拉黑，无法回复"); return; }
     const mine = { id: uid("r"), au: { k: "me" }, to: r0 ? r0.au : null, par: r0 ? r0.id : null, text, t: now(), likes: 0 };
-    p.rep = p.rep || []; p.rep.push(mine); i.value = ""; $("#scr-forumpost").classList.remove("fx-typing"); RTO = null; save(); renderPost();
+    p.rep = p.rep || []; p.rep.push(mine); i.value = ""; $("#scr-forumpost").classList.remove("fx-ptyping"); RTO = null; save(); renderPost();
     const b = $("#fxp-body"); b.scrollTop = b.scrollHeight;
     if (FX().set.autoReply) autoAfterMine(p, mine);
   }
@@ -16571,6 +16689,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     let icons = c ? '<button type="button" class="fx-cir" id="fxu-cpost" aria-label="让TA发帖">' + PEN + "</button>" : "";
     let btns;
     if (au.k === "me") btns = '<div class="fx-wide"><button type="button" id="fxu-share">分享个人资料</button><button type="button" id="fxu-edit">编辑个人资料</button></div>';
+    else if (n && n.blockMe) btns = '<div class="fx-wide"><button type="button" disabled>对方已将你拉黑</button></div>';
     else btns = '<div class="fx-wide"><button type="button" id="fxu-dm">私信</button><button type="button" id="fxu-fol" class="' + (fol ? "" : "solid") + '">' + (fol ? "正在关注" : (followsMe(au) ? "回关" : "关注")) + "</button></div>";
     const joined = au.k === "n" ? (d.posts.filter(p => same(p.au, au)).reduce((m, p) => Math.min(m, p.t), now())) : null;
     const ps = d.posts.filter(p => same(p.au, au)).sort((a, b2) => b2.t - a.t);
@@ -16658,17 +16777,30 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
         if (toMe || at) out.push({ p, r, t: r.t, at: at && !toMe });
       });
     });
+    (d.meRep || []).forEach(x => out.push({ sys: "rep", x, t: x.st === "wait" ? x.t : x.done }));
+    (d.meBlk || []).forEach(x => out.push({ sys: "blk", x, t: x.t }));
     return out.sort((a, b) => b.t - a.t);
+  }
+  function sysNoti(o, seen) {
+    const x = o.x; const n = npcById(x.npcId); const au = n ? { k: "n", id: n.id } : null;
+    const ava = au ? avaHTML(au) : '<div class="fx-ava">' + E(String(x.name || "?").slice(0, 1)) + "</div>";
+    let head, body, cls = "";
+    if (o.sys === "blk") { head = "把你拉黑了"; body = "你不能再回复 TA、私信 TA 或关注 TA。"; }
+    else if (x.st === "wait") { head = "举报了你的" + (KIND[x.kind] || "内容") + " · 审核中"; body = "理由：" + x.reason; }
+    else if (x.st === "ok") { head = "举报了你的" + (KIND[x.kind] || "内容") + " · 举报成功"; body = "理由：" + x.reason + "。内容已删除，账号封禁 1 分钟，" + fullTime(x.until) + " 解封。"; cls = " bad"; }
+    else { head = "举报了你的" + (KIND[x.kind] || "内容") + " · 举报未成功"; body = "理由：" + x.reason + "。经审核没有违规，不予处理。"; cls = " okk"; }
+    return '<div class="fx-post fx-nt fx-ntsys' + cls + (o.t > seen ? " new" : "") + '" data-fxns="' + x.id + '">' + ava + '<div class="fx-m"><div class="fx-meta"><b>' + E(x.name) + "</b><span>" + fxTime(o.t) + '</span></div><div class="fx-to">' + head + '</div><div class="fx-txt">' + E(body) + "</div>" + (x.text ? '<div class="fx-quote">你：' + E(String(x.text).slice(0, 60)) + "</div>" : "") + "</div></div>";
   }
   function paintBell() { const d = FX(); const dot = $("#fx-bell-dot"); if (!dot) return; const l = notiList(); dot.hidden = !(l.length && l[0].t > (d.notiSeen || 0)); }
   function openNoti() { NT = "all"; openApp("forumnoti"); renderNoti(); }
   function renderNoti() {
     const d = FX(); const b = $("#fxn-body"); if (!b) return; const seen = d.notiSeen || 0;
     $$("#scr-forumnoti [data-nt]").forEach(x => x.classList.toggle("on", x.dataset.nt === NT));
-    let l = notiList(); if (NT === "at") l = l.filter(x => x.at || (x.r && String(x.r.text).indexOf("@" + (ME.name || "我")) >= 0));
-    b.innerHTML = l.length ? l.map(({ p, r, t }) => { const au = r ? r.au : p.au; const src = r ? (r.to && r.to.k === "me" ? ((p.rep || []).find(x => x.id === parOf(p, r)) || p) : p) : null;
+    let l = notiList(); if (NT === "at") l = l.filter(x => !x.sys && (x.at || (x.r && String(x.r.text).indexOf("@" + (ME.name || "我")) >= 0)));
+    b.innerHTML = l.length ? l.map(o => { if (o.sys) return sysNoti(o, seen); const { p, r, t } = o; const au = r ? r.au : p.au; const src = r ? (r.to && r.to.k === "me" ? ((p.rep || []).find(x => x.id === parOf(p, r)) || p) : p) : null;
       return '<div class="fx-post fx-nt' + (t > seen ? " new" : "") + '" data-fxn="' + p.id + '" data-r="' + (r ? r.id : "") + '">' + avaHTML(au) + '<div class="fx-m"><div class="fx-meta"><b>' + E(nameOf(au)) + "</b>" + "<span>" + E(handleOf(au)) + " · " + fxTime(t) + '</span></div><div class="fx-to">' + (r ? (r.to && r.to.k === "me" || p.au.k === "me" ? "回复了你" : "提到了你") : "在帖子里提到了你") + '</div><div class="fx-txt">' + rich(r ? r.text : p.text) + "</div>" + (src ? '<div class="fx-quote">' + E(nameOf(src.au)) + "：" + E(String(src.text).slice(0, 60)) + "</div>" : "") + "</div></div>"; }).join("") + '<div style="height:30px"></div>'
       : '<div class="fx-empty"><b>还没有通知</b>别人回复你、或者 @ 你的时候会出现在这里。</div>';
+    $$("#fxn-body [data-fxns]").forEach(el => el.addEventListener("click", () => { const x = (FX().meRep || []).find(q => q.id === el.dataset.fxns); if (x) { if (x.st !== "wait") repResultSheet(x); return; } const bk = (FX().meBlk || []).find(q => q.id === el.dataset.fxns); if (bk && npcById(bk.npcId)) openUser({ k: "n", id: bk.npcId }); }));
     $$("#fxn-body [data-fxn]").forEach(x => x.addEventListener("click", () => { const p = FX().posts.find(q => q.id === x.dataset.fxn); if (!p) return; openPost(p.id); const r = x.dataset.r && (p.rep || []).find(q => q.id === x.dataset.r); if (r) { const par = parOf(p, r); if (par) { FST = [par]; renderPost(); } } }));
     d.notiSeen = now(); save(); paintBell();
   }
@@ -16720,8 +16852,8 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       setTimeout(() => {
         const ok = Math.random() < 0.55;
         if (!ok) { rec.st = "fail"; rec.done = now(); save(); openSheet('<h3>举报未成功</h3><p class="hint">你举报的 ' + E(n.name) + ' 的' + KIND[kind] + '（' + E(rec.reason) + '）经审核暂未违反社区规定，不予处理。</p><button class="btn" id="fxr-ok">知道了</button><button class="btn ghost" id="fxr-log" style="margin-top:8px">查看举报记录</button>'); $("#fxr-ok").addEventListener("click", closeSheet); $("#fxr-log").addEventListener("click", reportLog); return; }
-        const ban = Math.random() < 0.35;
-        const ms = ban ? rnd(24, 72) * 3600000 : rnd(1, 12) * 3600000;
+        const ban = true;
+        const ms = 3 * 86400000;
         n.ban = { type: ban ? "ban" : "mute", until: now() + ms, at: now(), why: obj.text.slice(0, 80), done: false };
         rec.st = "ok"; rec.type = n.ban.type; rec.until = n.ban.until; rec.done = now();
         if (kind === "dm") { const dm = getDm({ k: "n", id: n.id }); if (dm) dm.msgs.push({ sys: true, text: "你举报了 " + n.name + "，举报成功，对方已被" + (ban ? "封号" : "禁言"), t: now() }); } else obj.removed = true;
@@ -16788,7 +16920,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     $("#fxc-up").addEventListener("click", () => { if (CP.length >= 4) { toast("最多 4 张"); return; } pickFile(1080, u => { CP.push({ url: u, d: "（user 自己上传的一张照片）" }); paintCP(); }); });
     $("#fxc-ai").addEventListener("click", () => { $("#fxc-aibox").hidden = false; $("#fxc-aiq").focus(); });
     $("#fxc-aigo").addEventListener("click", async function () { const q = $("#fxc-aiq").value.trim(); if (!q) { toast("先写画面描述"); return; } if (CP.length >= 4) { toast("最多 4 张"); return; } this.disabled = true; this.textContent = "生成中…"; const u = await makeImg(q); this.disabled = false; this.textContent = "生成"; if (u) { CP.push({ url: u, d: q }); paintCP(); $("#fxc-aiq").value = ""; } });
-    $("#fxc-go").addEventListener("click", async () => {
+    $("#fxc-go").addEventListener("click", async () => { if (meLocked()) return;
       const t = $("#fxc-in").value.trim(); if (!t && !CP.length) { toast("写点什么再发"); return; }
       const p = { id: uid("p"), au: { k: "me" }, text: t, t: now(), likes: 0, rts: 0, views: 1, rep: [], imgs: [], imgd: [] };
       for (const x of CP) { const id = uid("i"); await putImg(id, x.url); p.imgs.push(id); p.imgd.push(x.d); }
@@ -16799,6 +16931,19 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
 
   /* ---------- 设置 ---------- */
   function setSheet() { openApp("forumset"); renderSet(); }
+  function apiBox(s) {
+    const a = s.api || {}; const c = a.chat || {}, i = a.image || {};
+    const f = (id, v, ph, pw) => '<input class="fx-in" id="' + id + '" type="' + (pw ? "password" : "text") + '" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + ph + '" value="' + E(v || "") + '" />';
+    const st = k => fxApi(k) ? '<b class="fx-apist on">用论坛自己的</b>' : '<b class="fx-apist">用小手机设置里的</b>';
+    return '<div class="fx-sgrp"><div class="fx-slab">论坛专用 API</div><div class="fx-shint">不填就用小手机设置里的；填了以后，论坛的帖子、回复、私信都用这里的聊天 API，配图用这里的生图 API</div>' +
+      '<div class="fx-apibox"><div class="fx-apih">聊天 API ' + st("chat") + "</div>" + f("fxs-cu", c.url, "接口地址，比如 https://api.xxx.com/v1") + f("fxs-ck", c.key, "密钥 sk-…", true) + f("fxs-cm", c.model, "模型名，比如 gpt-4o-mini") + "</div>" +
+      '<div class="fx-apibox"><div class="fx-apih">生图 API ' + st("image") + "</div>" + f("fxs-iu", i.url, "接口地址") + f("fxs-ik", i.key, "密钥", true) + f("fxs-im", i.model, "模型名，比如 dall-e-3") + "</div>" +
+      '<button type="button" class="fx-bigbtn ghost sm" id="fxs-apiclr">清空论坛 API，改回用小手机设置里的</button></div>';
+  }
+  function readApi(s) {
+    const v = id => ($("#" + id) ? $("#" + id).value.trim() : "");
+    s.api = { chat: { url: v("fxs-cu"), key: v("fxs-ck"), model: v("fxs-cm") }, image: { url: v("fxs-iu"), key: v("fxs-ik"), model: v("fxs-im") } };
+  }
   function renderSet() {
     const d = FX(), s = d.set; const b = $("#fxs-body"); if (!b) return;
     const sw = (id, on, lab, hint) => '<button type="button" class="fx-srow" id="' + id + '"><span class="rlab">' + lab + (hint ? "<small>" + hint + "</small>" : "") + '</span><span class="fx-sw' + (on ? " on" : "") + '"></span></button>';
@@ -16809,16 +16954,18 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
       sw("fxs-ca", s.charAuto, "角色自动参与", "关掉时角色只在你点「让TA发帖 / 回复」时出现") +
       sw("fxs-dm", s.npcDm, "NPC 主动私信", "开着小手机时，NPC 会不定时来私信你") +
       '<div class="fx-srow2" id="fxs-dmw"' + (s.npcDm ? "" : ' style="display:none"') + '><span class="rlab">大概多久来一次私信（分钟）</span><input class="fx-in sm" id="fxs-dmm" type="number" min="3" max="1440" value="' + s.dmMin + '" /></div></div>' +
+      apiBox(s) +
       '<div class="fx-sgrp fx-scard"><button type="button" class="fx-srow" id="fxs-npc"><span class="rlab">NPC 人设<small>查看、修改、删除或自己添加 NPC（' + d.npcs.length + ' 个）</small></span><span class="chev">›</span></button></div>' +
       '<button type="button" class="fx-bigbtn" id="fxs-save">保存</button><button type="button" class="fx-bigbtn ghost" id="fxs-clear">清空论坛（帖子、NPC、私信）</button><div style="height:30px"></div>';
     const tog = (id, k) => $("#" + id).addEventListener("click", function () { s[k] = !s[k]; this.querySelector(".fx-sw").classList.toggle("on", s[k]); if (k === "npcDm") $("#fxs-dmw").style.display = s[k] ? "" : "none"; });
     tog("fxs-ar", "autoReply"); tog("fxs-ca", "charAuto"); tog("fxs-dm", "npcDm");
     $$("#fxs-body [data-ps]").forEach(x => x.addEventListener("click", () => { const p = PRESETS[+x.dataset.ps]; $("#fxs-prompt").value = p[1]; if (!$("#fxs-name").value.trim() || $("#fxs-name").value === "论坛") $("#fxs-name").value = p[0]; }));
     $("#fxs-npc").addEventListener("click", openNpcList);
+    $("#fxs-apiclr").addEventListener("click", () => { s.api = {}; save(); renderSet(); toast("已改回用小手机设置里的 API"); });
     $("#fxs-save").addEventListener("click", () => {
       s.name = $("#fxs-name").value.trim() || "论坛"; s.prompt = $("#fxs-prompt").value.trim();
       s.n = Math.max(1, Math.min(12, parseInt($("#fxs-n").value, 10) || 5)); s.dmMin = Math.max(3, Math.min(1440, parseInt($("#fxs-dmm").value, 10) || 30));
-      if (s.npcDm) d.lastAuto = now(); save(); renderFeed(); toast("论坛设置已保存"); goBack();
+      readApi(s); if (s.npcDm) d.lastAuto = now(); save(); renderFeed(); toast("论坛设置已保存"); goBack();
     });
     $("#fxs-clear").addEventListener("click", function () {
       if (this.dataset.armed !== "1") { this.dataset.armed = "1"; this.textContent = "再点一次，确认清空"; return; }
@@ -16874,7 +17021,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     $("#fxd-ttl").textContent = nameOf(dm.peer);
     let last = 0;
     b.innerHTML = '<div class="fx-prof" style="text-align:center;border:0;padding-top:8px">' + avaHTML(dm.peer, true).replace('class="fx-ava big"', 'class="fx-ava big" style="margin:0 auto;display:grid"') + "<h4>" + E(nameOf(dm.peer)) + '</h4><div class="fx-h">' + E(handleOf(dm.peer)) + "</div></div>" +
-      dm.msgs.map(m => { let t = ""; if (m.t - last > 600000) t = '<div class="fx-btime">' + fullTime(m.t) + "</div>"; last = m.t; return t + (m.sys ? '<div class="fx-btime">' + E(m.text) + "</div>" : '<div class="fx-bub' + (m.me ? " me" : "") + '">' + E(m.text) + "</div>"); }).join("") +
+      dm.msgs.map(m => { let t = ""; if (m.t - last > 600000) t = '<div class="fx-btime">' + fullTime(m.t) + "</div>"; last = m.t; return t + (m.sys ? '<div class="fx-btime">' + E(m.text) + "</div>" : m.removed ? '<div class="fx-bub' + (m.me ? " me" : "") + ' fx-bubrm">该消息因违反社区规定已被删除</div>' : '<div class="fx-bub' + (m.me ? " me" : "") + '">' + E(m.text) + "</div>"); }).join("") +
       (typing ? '<div class="fx-typing">对方正在输入…</div>' : "") + (dm.blocked ? '<div class="fx-btime">对方已将你拉黑，消息发不出去了</div>' : "");
     b.scrollTop = b.scrollHeight;
     const inp = $("#fxd-in"); inp.disabled = !!dm.blocked; $("#fxd-send").disabled = !!dm.blocked;
@@ -16885,7 +17032,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     const n = npcById(au.id); const b = banOf(n);
     return "你是论坛 NPC「" + n.name + "」：" + (n.age || "?") + "，" + (n.gender || "?") + "，性格：" + (n.persona || "未定") + (n.imp ? "。你对 user 目前的印象：" + n.imp : "") + (b ? "。你现在" + (b.type === "ban" ? "被封号" : "被禁言") + "了。" : "");
   }
-  function dmHist(dm) { return dm.msgs.slice(-24).map(m => m.sys ? "（" + m.text + "）" : (m.me ? "user" : nameOf(dm.peer)) + "：" + m.text).join("\n"); }
+  function dmHist(dm) { return dm.msgs.slice(-24).map(m => m.removed ? (m.me ? "user" : nameOf(dm.peer)) + "：（这条消息违规被删了）" : m.sys ? "（" + m.text + "）" : (m.me ? "user" : nameOf(dm.peer)) + "：" + m.text).join("\n"); }
   /* 私信左边按钮：生成中 = 停止，空闲 = 让 TA 继续回 */
   const DMBUSY = new Set();
   const AI_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3.5 13.9 9 19.5 11 13.9 13 12 18.5 10.1 13 4.5 11 10.1 9z"/></svg>';
@@ -16904,7 +17051,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     }
   }
   async function sendDm() {
-    const i = $("#fxd-in"); const text = i.value.trim(); if (!text) return;
+    const i = $("#fxd-in"); const text = i.value.trim(); if (!text) return; if (meLocked()) return;
     const dm = FX().dms.find(x => x.id === CURD); if (!dm || dm.blocked) return;
     dm.msgs.push({ me: true, text, t: now() }); i.value = ""; save(); renderDm();
     if (FX().set.autoReply) dmReply(dm);
@@ -16914,13 +17061,13 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     const lastMe = dm.msgs.slice().reverse().find(m => m.me); const text = lastMe ? lastMe.text : "";
     if (dm.peer.k === "n" && banOf(npcById(dm.peer.id)) && banOf(npcById(dm.peer.id)).type === "ban") { dm.msgs.push({ sys: true, text: "对方账号被封禁中，暂时收不到消息", t: now() }); save(); renderDm(); return; }
     const isNpc = dm.peer.k === "n"; const askWx = isNpc && WX_RE.test(text) && !FX().wxp.find(w => w.npcId === dm.peer.id);
-    const sys = sysBase() + "\n【私信】" + peerText(dm.peer) + "\n现在是你和 user 的私聊。像真人用聊天软件那样回：口语、可以拆成几条短消息、可以很短、可以不耐烦、可以拒绝；不要动作和心理描写。如果你实在不想理 user，可以只回一句甚至拉黑（block=true）。";
-    const fmt = "\n格式：{\"msgs\":[\"一条消息\",\"可以再来一条\"],\"block\":false," + (askWx ? "\"giveWx\":false,\"wxid\":\"\"," : "") + "\"imp\":\"你对 user 的最新印象（一句话，有变化才写）\"}" + "\n只输出 JSON，不要解释。";
+    const sys = sysBase() + "\n【私信】" + peerText(dm.peer) + "\n现在是你和 user 的私聊。像真人用聊天软件那样回：口语、可以拆成几条短消息、可以很短、可以不耐烦、可以拒绝；不要动作和心理描写。如果你实在不想理 user，可以只回一句甚至拉黑（block=true）；如果你觉得 user 冒犯、骚扰了你，也可以去举报 user（report=true，reportWhy 从 人身攻击 / 辱骂、骚扰、引战 / 恶意带节奏、造谣 / 不实信息、其他 里选一个）。";
+    const fmt = "\n格式：{\"msgs\":[\"一条消息\",\"可以再来一条\"],\"block\":false,\"report\":false,\"reportWhy\":\"\"," + (askWx ? "\"giveWx\":false,\"wxid\":\"\"," : "") + "\"imp\":\"你对 user 的最新印象（一句话，有变化才写）\"}" + "\n只输出 JSON，不要解释。";
     const extra = askWx ? "\nuser 这句话在问你要微信/联系方式。按你的性格和你们目前的关系，自己决定给不给（关系还不熟、对 user 没好感、性格谨慎都可以拒绝）。如果给，giveWx=true，wxid 编一个像真的微信号（字母开头，字母数字下划线，6~20 位），并在消息里自然地把它发出来。" : "";
     if (DMBUSY.has(dm.id)) return;
     dm._stop = false; DMBUSY.add(dm.id); paintAiBtn();
     $("#fxd-send").disabled = true; renderDm(true);
-    let j = null; try { j = pj(await llm(sys, "【聊天记录】\n" + dmHist(dm) + extra + fmt, 900)); } catch (e) {}
+    let j = null; try { j = pj(await llm(sys, "【聊天记录】\n" + dmHist(dm) + extra + fmt, 900, () => dm._stop)); } catch (e) {}
     if (dm._stop) return;
     $("#fxd-send").disabled = false;
     if (!j) { DMBUSY.delete(dm.id); paintAiBtn(); renderDm(); toast(failMsg()); return; }
@@ -16928,7 +17075,9 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     await deliver(dm, (j.msgs || []).filter(Boolean).slice(0, 6));
     const stopped = dm._stop; DMBUSY.delete(dm.id); dm._stop = false; paintAiBtn(); if (stopped) return;
     if (CURD === dm.id) renderDm(false);
-    if (j.block) { dm.blocked = true; dm.msgs.push({ sys: true, text: "你已被对方拉黑", t: now() }); save(); renderDm(); }
+    const pn = isNpc ? npcById(dm.peer.id) : null;
+    if (pn && (j.report || Math.random() < 0.04)) reportMe(pn, "dm", text, j.reportWhy);
+    if (j.block || (pn && Math.random() < 0.03)) { if (pn) blockMe(pn, text); else { dm.blocked = true; dm.msgs.push({ sys: true, text: "你已被对方拉黑", t: now() }); save(); } renderDm(); }
     if (askWx && j.giveWx && j.wxid) makeArchive(dm, npcById(dm.peer.id), String(j.wxid).replace(/[^A-Za-z0-9_\-]/g, "").slice(0, 20) || ("wx_" + mkHandle()));
   }
 
@@ -16979,7 +17128,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
         if (Math.random() < 0.6) {
           const dm = getDm({ k: "n", id: back.id }, true);
           if (!dm.blocked) {
-            const sys = sysBase() + "\n【私信】" + peerText({ k: "n", id: back.id }) + "\n你之前因为这条内容被举报：「" + was.why + "」，被" + (was.type === "ban" ? "封号" : "禁言") + "了，刚刚解封。你认定（或强烈怀疑）是 user 举报的。现在你主动私信 user 找麻烦：按你的性格来，可能直接骂、可能阴阳怪气、可能质问、也可能只冷冷甩一句。像真人发消息，可以拆几条。";
+            const sys = sysBase() + "\n【私信】" + peerText({ k: "n", id: back.id }) + "\n你之前因为这条内容被举报：「" + was.why + "」，被" + (was.type === "ban" ? "封号" : "禁言") + "了，刚刚解封。你知道就是 user 举报的。现在你主动私信 user 找麻烦：按你的性格来，可能直接骂、可能阴阳怪气、可能质问、也可能只冷冷甩一句。像真人发消息，可以拆几条。";
             const j = pj(await llm(sys, "【之前的私聊】\n" + (dmHist(dm) || "（没聊过）") + "\n格式：{\"msgs\":[\"\"],\"imp\":\"对user的新印象\"}，只输出 JSON。", 600));
             if (j && (j.msgs || []).length) { if (j.imp) back.imp = String(j.imp).slice(0, 80); await deliver(dm, j.msgs.slice(0, 5)); }
           }
@@ -17014,15 +17163,16 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     if (!ids.length) return "";
     return '<div class="fx-pics n' + Math.min(4, ids.length) + (big ? " big" : "") + '">' + ids.slice(0, 4).map(id => '<img class="fx-pic" data-fxpic="1" data-fximg="' + id + '" src="' + E(IMGC[id] || "data:image/gif;base64,R0lGODlhAQABAAAAACw=") + '" alt="" />').join("") + "</div>";
   }
-  function hasImgApi() { try { return !!(apis && apis.image && apis.image.url && apis.image.key); } catch (e) { return false; } }
+  function hasImgApi() { if (fxApi("image")) return true; try { return !!(apis && apis.image && apis.image.url && apis.image.key); } catch (e) { return false; } }
   function blobToData(blob, max) {
     return new Promise(res => { const url = URL.createObjectURL(blob), im = new Image();
       im.onload = () => { try { const s = Math.min(1, max / Math.max(im.width, im.height)); const cv = document.createElement("canvas"); cv.width = Math.round(im.width * s); cv.height = Math.round(im.height * s); cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height); res(cv.toDataURL("image/jpeg", .86)); } catch (e) { res(url); } };
       im.onerror = () => res(""); im.src = url; });
   }
   async function makeImg(desc) {
-    if (hasImgApi() && typeof genImage === "function") {
-      try { const r = await genImage(desc + "。真实手机随手拍的照片质感，自然光，生活感，画面里不要出现文字和水印。"); if (r) { if (r.blob) { const u = await blobToData(r.blob, 1080); if (u) return u; } if (r.url) return r.url; } } catch (e) { toast((e && e.message) || "生图失败，改成文字图"); }
+    const fi = fxApi("image");
+    if (fi || (hasImgApi() && typeof genImage === "function")) {
+      try { const r = await (fi ? fxGenImage(fi, desc + "。真实手机随手拍的照片质感，自然光，生活感，画面里不要出现文字和水印。") : genImage(desc + "。真实手机随手拍的照片质感，自然光，生活感，画面里不要出现文字和水印。")); if (r) { if (r.blob) { const u = await blobToData(r.blob, 1080); if (u) return u; } if (r.url) return r.url; } } catch (e) { toast((e && e.message) || "生图失败，改成文字图"); }
     }
     try { return fxTextCard(desc); } catch (e) { try { return makeTextImage(desc); } catch (e2) { return ""; } }
   }
@@ -17240,6 +17390,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
   }
   function postAct(act, id) {
     const p = FX().posts.find(x => x.id === id); if (!p) return;
+    if ((act === "like" || act === "rt" || act === "rep") && meLocked()) return;
     if (act === "like") { p.liked = !p.liked; p.likes = Math.max(0, (p.likes || 0) + (p.liked ? 1 : -1)); }
     else if (act === "rt") { p.rted = !p.rted; p.rts = Math.max(0, (p.rts || 0) + (p.rted ? 1 : -1)); toast(p.rted ? "已转帖" : "已取消转帖"); }
     else if (act === "bm") { p.bm = !p.bm; p.bms = Math.max(0, (p.bms || 0) + (p.bm ? 1 : -1)); toast(p.bm ? "已加入书签" : "已移除书签"); }
@@ -17261,7 +17412,7 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     const a = t.closest("[data-act]"); if (a) { e.stopPropagation(); postAct(a.dataset.act, a.dataset.id); return; }
     const sm = t.closest("[data-sum]"); if (sm) { e.stopPropagation(); const r = t.closest("[data-fxr]"); const rid = sm.dataset.rid || (r ? r.dataset.fxr : null); (async () => { for (const cid of sm.dataset.sum.split(",")) await summon(cid, rid); })(); return; }
     const ra = t.closest("[data-ract]"); if (ra) {
-      e.stopPropagation(); const p = FX().posts.find(x => x.id === CUR); const r = p && (p.rep || []).find(x => x.id === ra.dataset.id); if (!r) return;
+      e.stopPropagation(); const p = FX().posts.find(x => x.id === CUR); const r = p && (p.rep || []).find(x => x.id === ra.dataset.id); if (!r) return; if (["like", "rt", "rep"].indexOf(ra.dataset.ract) >= 0 && meLocked()) return;
       if (ra.dataset.ract === "like") { r.liked = !r.liked; r.likes = Math.max(0, (r.likes || 0) + (r.liked ? 1 : -1)); save(); renderPost(); }
       else if (ra.dataset.ract === "rt") { r.rted = !r.rted; r.rts = Math.max(0, (r.rts || 0) + (r.rted ? 1 : -1)); toast(r.rted ? "已转帖" : "已取消转帖"); save(); renderPost(); }
       else if (ra.dataset.ract === "bm") { r.bm = !r.bm; toast(r.bm ? "已加入书签" : "已移除书签"); save(); renderPost(); }
@@ -17283,14 +17434,14 @@ window.__xjAddon = { letRead, readMemo, swapEmo, emoSys, learnEmo, ensureDanta, 
     $$("#scr-forumfl [data-flt]").forEach(b => b.addEventListener("click", () => { FLT = b.dataset.flt; renderFl(); }));
     $("#fxf-body").addEventListener("click", e => { const f = e.target.closest("[data-flf]"); if (f) { e.stopPropagation(); toggleFollow(keyAu(f.dataset.flf)); renderFl(); return; } const u = e.target.closest("[data-fxu]"); if (u) openUser(keyAu(u.dataset.fxu)); });
     bind("#fxu-hmore", userMore); bind("#fxu-back", () => goBack());
-    const pin = $("#fxp-in"); if (pin) { const upd = () => $("#scr-forumpost").classList.toggle("fx-typing", !!pin.value.trim()); pin.addEventListener("input", upd); pin.addEventListener("focus", () => $("#scr-forumpost").classList.add("fx-focus")); pin.addEventListener("blur", () => setTimeout(() => { if (!pin.value.trim()) $("#scr-forumpost").classList.remove("fx-focus"); upd(); }, 150)); }
+    const pin = $("#fxp-in"); if (pin) { const upd = () => $("#scr-forumpost").classList.toggle("fx-ptyping", !!pin.value.trim()); pin.addEventListener("input", upd); pin.addEventListener("focus", () => $("#scr-forumpost").classList.add("fx-focus")); pin.addEventListener("blur", () => setTimeout(() => { if (!pin.value.trim()) $("#scr-forumpost").classList.remove("fx-focus"); upd(); }, 150)); }
     const ub = $("#fxu-body"); if (ub) ub.addEventListener("scroll", () => $("#scr-forumuser").classList.toggle("fx-scrolled", ub.scrollTop > 70), { passive: true }); bind("#fxn-add", () => openNpcEd(null));
     $("#fxn-body").addEventListener("click", e => { const r = e.target.closest("[data-fxne]"); if (r) openNpcEd(r.dataset.fxne); });
     bind("#fx-gen", () => NAV === "dm" ? dmGenSheet() : genSheet());
     bind("#fx-bell", openNoti);
     $$("#scr-forumnoti [data-nt]").forEach(x => x.addEventListener("click", () => { NT = x.dataset.nt; renderNoti(); }));
-    bind("#fxp-back", postBack); bind("#fxd-ai", () => { const dm = FX().dms.find(x => x.id === CURD); if (!dm) return; if (DMBUSY.has(dm.id)) stopDm(dm); else dmReply(dm); });
-    bind("#fxed-save", saveEdit); bind("#fx-set", setSheet); bind("#fx-compose", composeSheet); bind("#fxp-more", () => postMenu());
+    bind("#fxp-back", postBack); bind("#fxd-ai", () => { const dm = FX().dms.find(x => x.id === CURD); if (!dm) return; if (DMBUSY.has(dm.id)) stopDm(dm); else { if (meLocked()) return; dmReply(dm); } });
+    bind("#fxed-save", saveEdit); bind("#fx-set", setSheet); bind("#fx-compose", () => { if (!meLocked()) composeSheet(); }); bind("#fxp-more", () => postMenu());
     bind("#fxp-send", sendReply); bind("#fxd-send", sendDm);
     $("#fxp-in").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendReply(); } });
     $("#fxd-in").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendDm(); } });
